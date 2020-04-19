@@ -119,9 +119,18 @@ def compute_new_position(former_position, distance, angle):
     )
 
 
+def limit_steer(steer, max_abs):
+    if steer < -max_abs:
+        return -max_abs
+    elif steer > max_abs:
+        return max_abs
+    else:
+        return steer
+
+
 # iteration
 def iterate(args_tuple):
-    vehicle, delta_t, rand_portion, coef_mul_speed, i = args_tuple
+    vehicle, delta_t, rand_degrees, max_speed, max_steer, i = args_tuple
 
     position = vehicle.position
     angle = vehicle.angle
@@ -129,11 +138,15 @@ def iterate(args_tuple):
     speed = vehicle.speed
     steer = vehicle.steer
 
-    delta_d = speed * coef_mul_speed * delta_t
+    delta_d = speed * delta_t
     rand_minus_1_plus_1 = 2 * random.random() - 1
+    rand_ratio = rand_degrees / 360
+    speed_ratio = speed / max_speed
 
-    new_angle = angle + steer * delta_t * (1 + rand_portion * rand_minus_1_plus_1)
+    new_angle = (angle + limit_steer(steer, max_steer) * delta_t) * (1 + rand_ratio * rand_minus_1_plus_1 * speed_ratio)
     new_position = compute_new_position(position, delta_d, angle)
+
+    print("\nSIMULATION\t\tangle difference = " + str(new_angle - angle) + "" + "\n\n")
 
     vehicle.position = new_position
     vehicle.angle = new_angle
@@ -142,12 +155,12 @@ def iterate(args_tuple):
 
 
 # loop that periodically adds the iterate() function to gtk queued tasks
-def simu_loop(vehicle, simu_period, rand_portion, coef_mul_speed):
+def simu_loop(vehicle, simu_period, rand_degrees, max_speed, max_steer):
     random.seed(42)
     i = 1
     while True:
         sleep(simu_period)
-        GLib.idle_add(iterate, (vehicle, simu_period, rand_portion, coef_mul_speed, i))
+        GLib.idle_add(iterate, (vehicle, simu_period, rand_degrees, max_speed, max_steer, i))
         i += 1
 
 
@@ -155,27 +168,28 @@ def simu_loop(vehicle, simu_period, rand_portion, coef_mul_speed):
 def main_simulator(vehicle):
     # Parameters Begin
     window_size = (1200, 800)   # size of the window in pixels
-    scale = (1500, 1000)        # max size of the map in meters for both coordinates, used for scaling
+    scale = (150, 100)        # max size of the map in meters for both coordinates, used for scaling
     points = [                  # coordinates of the points (autonomous vehicle stops)
-        (300, 200),
-        (300, 800),
-        (1200, 200),
-        (1200, 800)
+        (30, 20),
+        (30, 80),
+        (120, 20),
+        (120, 80)
     ]
     coefs = {                   # coefficients used to adjust the size of graphical elements (they are automatically resized when the window is resized)
         "point_size": 4,
         "rect_size": 5
     }
     simu_period = 0.01          # period between each iteration (delta_t)
-    rand_portion = 0.1          # random percentage is the new angle calculation from steer and previous angle
-    coef_mul_speed = 20         # multiplier coefficient for speed
+    rand_degrees = 1            # maximum random deviation (in degrees) in the new angle calculation from steer and previous angle (angle is multiplied by : 1 + rand_degrees / 360 * random_minus1_plus1 * speed / max_speed)
+    max_speed = 5               # maximum speed value (speed <= max_speed)
+    max_steer = 1000            # maximum steer value (-max_steer <= steer <= max_steer)
     # Parameters End
 
     # create the window object used by the graphical library
     SimuWindow(window_size, vehicle, scale, points, coefs)
 
     # create a thread for the simu_loop() function
-    Thread(target=simu_loop, args=(vehicle, simu_period, rand_portion, coef_mul_speed), daemon=True).start()
+    Thread(target=simu_loop, args=(vehicle, simu_period, rand_degrees, max_speed, max_steer), daemon=True).start()
     # launches the graphical simulator application
     Gtk.main()
 
@@ -248,9 +262,9 @@ def compute_direction_error(measured_direction, aimed_direction):
 def main_pid_loop(vehicle, destination):
     # Parameters Begin
     pid_period = 0.05
-    max_speed = 4
+    max_speed = 5
     stop_distance = 8
-    k = K(1, 1, 1)  # steer pid coefs (kp, ki, kd)  TO ADJUST
+    k = K(3, 1, 10)  # steer pid coefs (kp, ki, kd)  TO ADJUST
     # Parameters End
 
     previous_error_direction = 0
@@ -275,14 +289,14 @@ def main_pid_loop(vehicle, destination):
             k.i * total_error_direction + \
             k.d * (error_direction - previous_error_direction)
 
-        previous_error_direction = error_direction
-
         speed = get_aimed_speed(x_pos, y_pos, x_dest, y_dest, stop_distance, max_speed)
+
+        print("speed = " + str(round(speed, 2)) + "\t\t" + "kp = " + str(round(k.p * error_direction, 2)) + "\t\t" + "ki = " + str(round(k.i * total_error_direction, 2)) + "\t\t" + "kd = " + str(round(k.d * (error_direction - previous_error_direction), 2)) + "\t\t" + "steer = " + str(round(steer, 2)) + "\n")
+
+        previous_error_direction = error_direction
 
         vehicle.speed = speed
         vehicle.steer = steer
-
-        print("speed = " + str(speed) + "\t\t" + "steer = " + str(steer) + "\n")
 
 
 ############
@@ -291,12 +305,12 @@ def main_pid_loop(vehicle, destination):
 
 def main():
 
-    position = (300, 200)
+    position = (30, 20)
     angle = 0
     vehicle = Vehicle(position, angle)
 
     if len(sys.argv) < 2:
-        destination = (1200, 800)
+        destination = (120, 80)
     else:
         destination = (
             float(sys.argv[1]),
