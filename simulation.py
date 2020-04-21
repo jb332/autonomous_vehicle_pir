@@ -21,6 +21,15 @@ class Vehicle:
         self.update_draw = None
 
 
+def compute_angle_difference(angle1, angle2):
+    delta_angle = angle1 % 360 - angle2 % 360
+    if delta_angle > 180:
+        delta_angle -= 360
+    elif delta_angle < -180:
+        delta_angle += 360
+    return delta_angle
+
+
 #################
 ### Simulator ###
 #################
@@ -88,14 +97,14 @@ class SimuWindow(Gtk.Window):
         rect_x, rect_y = self.convert_coord(self.vehicle.position, width, height)
         rect_angle = math.radians(self.vehicle.angle)
 
-        rect_x1 = rect_x + math.sin(rect_angle - rect_angle_top_right) * rect_semi_diag
-        rect_y1 = rect_y - math.cos(rect_angle - rect_angle_top_right) * rect_semi_diag
-        rect_x2 = rect_x + math.sin(rect_angle - rect_angle_bottom_right) * rect_semi_diag
-        rect_y2 = rect_y - math.cos(rect_angle - rect_angle_bottom_right) * rect_semi_diag
-        rect_x3 = rect_x + math.sin(rect_angle - rect_angle_bottom_left) * rect_semi_diag
-        rect_y3 = rect_y - math.cos(rect_angle - rect_angle_bottom_left) * rect_semi_diag
-        rect_x4 = rect_x + math.sin(rect_angle - rect_angle_top_left) * rect_semi_diag
-        rect_y4 = rect_y - math.cos(rect_angle - rect_angle_top_left) * rect_semi_diag
+        rect_x1 = rect_x + math.sin((rect_angle - rect_angle_top_right) % (2 * math.pi)) * rect_semi_diag
+        rect_y1 = rect_y - math.cos((rect_angle - rect_angle_top_right) % (2 * math.pi)) * rect_semi_diag
+        rect_x2 = rect_x + math.sin((rect_angle - rect_angle_bottom_right) % (2 * math.pi)) * rect_semi_diag
+        rect_y2 = rect_y - math.cos((rect_angle - rect_angle_bottom_right) % (2 * math.pi)) * rect_semi_diag
+        rect_x3 = rect_x + math.sin((rect_angle - rect_angle_bottom_left) % (2 * math.pi)) * rect_semi_diag
+        rect_y3 = rect_y - math.cos((rect_angle - rect_angle_bottom_left) % (2 * math.pi)) * rect_semi_diag
+        rect_x4 = rect_x + math.sin((rect_angle - rect_angle_top_left) % (2 * math.pi)) * rect_semi_diag
+        rect_y4 = rect_y - math.cos((rect_angle - rect_angle_top_left) % (2 * math.pi)) * rect_semi_diag
         rect_x5 = rect_x + math.sin(rect_angle) * rect_semi_diag * 5 / 4
         rect_y5 = rect_y - math.cos(rect_angle) * rect_semi_diag * 5 / 4
 
@@ -108,6 +117,15 @@ class SimuWindow(Gtk.Window):
         cr.stroke()
 
 
+def limit_steer(steer, max_abs):
+    if steer < -max_abs:
+        return -max_abs
+    elif steer > max_abs:
+        return max_abs
+    else:
+        return steer
+
+
 # compute the new position from the former one, the distance between them and the angle
 def compute_new_position(former_position, distance, angle):
     x, y = former_position
@@ -117,15 +135,6 @@ def compute_new_position(former_position, distance, angle):
         x + delta_x,
         y + delta_y
     )
-
-
-def limit_steer(steer, max_abs):
-    if steer < -max_abs:
-        return -max_abs
-    elif steer > max_abs:
-        return max_abs
-    else:
-        return steer
 
 
 # iteration
@@ -143,10 +152,10 @@ def iterate(args_tuple):
     rand_ratio = rand_degrees / 360
     speed_ratio = speed / max_speed
 
-    new_angle = (angle + limit_steer(steer, max_steer) * delta_t) * (1 + rand_ratio * rand_minus_1_plus_1 * speed_ratio)
+    new_angle = (angle + limit_steer(steer, max_steer) * delta_t) * (1 + rand_ratio * rand_minus_1_plus_1 * speed_ratio) % 360 # REMOVE "% 360"
     new_position = compute_new_position(position, delta_d, angle)
 
-    print("\nSIMULATION\t\tangle difference = " + str(new_angle - angle) + "" + "\n\n")
+    print("\nSIMULATION\t\tangle difference = " + str(round(compute_angle_difference(new_angle, angle), 2)) + "" + "\n\n")
 
     vehicle.position = new_position
     vehicle.angle = new_angle
@@ -182,7 +191,7 @@ def main_simulator(vehicle):
     simu_period = 0.01          # period between each iteration (delta_t)
     rand_degrees = 1            # maximum random deviation (in degrees) in the new angle calculation from steer and previous angle (angle is multiplied by : 1 + rand_degrees / 360 * random_minus1_plus1 * speed / max_speed)
     max_speed = 5               # maximum speed value (speed <= max_speed)
-    max_steer = 1000            # maximum steer value (-max_steer <= steer <= max_steer)
+    max_steer = 45              # maximum steer value (-max_steer <= steer <= max_steer)
     # Parameters End
 
     # create the window object used by the graphical library
@@ -249,22 +258,16 @@ def get_aimed_speed(x_pos, y_pos, x_dest, y_dest, stop_distance, max_speed):
 
 # basically a difference with modulos
 def compute_direction_error(measured_direction, aimed_direction):
-    error_direction = aimed_direction - measured_direction
-    if error_direction < 0:
-        error_direction += 360
-    elif error_direction > 360:
-        error_direction -= 360
-
-    return error_direction
+    return compute_angle_difference(aimed_direction, measured_direction)
 
 
 # pid process
-def main_pid_loop(vehicle, destination):
+def main_pid_loop(vehicle, destination, destination_list):
     # Parameters Begin
     pid_period = 0.05
     max_speed = 5
     stop_distance = 8
-    k = K(3, 1, 10)  # steer pid coefs (kp, ki, kd)  TO ADJUST
+    k = K(3, 0.1, 10)  # steer pid coefs (kp, ki, kd)
     # Parameters End
 
     previous_error_direction = 0
@@ -277,7 +280,8 @@ def main_pid_loop(vehicle, destination):
 
         current_direction = vehicle.angle
         x_pos, y_pos = vehicle.position
-        x_dest, y_dest = destination
+        # x_dest, y_dest = destination
+        x_dest, y_dest = destination_list[0]
 
         # direction
         aimed_direction = get_aimed_direction(x_pos, y_pos, x_dest, y_dest)
@@ -285,11 +289,16 @@ def main_pid_loop(vehicle, destination):
         total_error_direction += error_direction
 
         steer = \
-            k.p * error_direction + \
-            k.i * total_error_direction + \
-            k.d * (error_direction - previous_error_direction)
+                k.p * error_direction + \
+                k.i * total_error_direction + \
+                k.d * (error_direction - previous_error_direction)
 
         speed = get_aimed_speed(x_pos, y_pos, x_dest, y_dest, stop_distance, max_speed)
+
+        # destination change
+        distance_to_target = compute_distance(x_pos, y_pos, x_dest, y_dest)
+        if distance_to_target < stop_distance and len(destination_list) > 1:
+            destination_list.pop(0)
 
         print("speed = " + str(round(speed, 2)) + "\t\t" + "kp = " + str(round(k.p * error_direction, 2)) + "\t\t" + "ki = " + str(round(k.i * total_error_direction, 2)) + "\t\t" + "kd = " + str(round(k.d * (error_direction - previous_error_direction), 2)) + "\t\t" + "steer = " + str(round(steer, 2)) + "\n")
 
@@ -309,15 +318,24 @@ def main():
     angle = 0
     vehicle = Vehicle(position, angle)
 
+    destination_list = [
+        (100, 20),
+        (105, 23),
+        (110, 26),
+        (115, 29),
+        (120, 32),
+        (120, 80),
+    ]
+
     if len(sys.argv) < 2:
-        destination = (120, 80)
+        destination = (120, 20)
     else:
         destination = (
             float(sys.argv[1]),
             float(sys.argv[2])
         )
 
-    Thread(target=main_pid_loop, args=(vehicle, destination,), daemon=True).start()
+    Thread(target=main_pid_loop, args=(vehicle, destination, destination_list), daemon=True).start()
     main_simulator(vehicle)
 
 
