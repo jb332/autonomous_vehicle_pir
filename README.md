@@ -1,4 +1,4 @@
-# Autonomous Vehicle Tutored Project
+# Autonomous vehicle tutored project
 
 ## Important
 
@@ -13,7 +13,7 @@ If you already cloned this repository the classic way, you will get blank direct
 ## Conception
 You can find diagrams to understand how the project works in the following directory :
 
-    diagrams
+    diagrams/
 
 The use case diagram describes the scope of our project, and the global diagram describes in detail how the different elements of the system (Raspberry Pi, Server, Client, etc.) work and the protocols they use (OM2M, ROS, HTTP, etc.)
 There are also sequences diagrams describing some features.
@@ -27,21 +27,21 @@ The project has been divided into two main modules :
 
 ### Web site
 
-The web site is the interface the user will manipulate to select a stop and be transported by the shuttle. You can find more details in the web site submodule README file here :
+The web site is the interface the user will manipulate to select a stop and be transported by the shuttle. You can find more details in the web site submodule README file located in the following directory  :
 
-    implementation_web
+    implementation_web/
 
-There also exists a second version of the web site designed as an android web app here :
+There is second way to use the service, using an android application that runs a modified version of the web site as its main view, its source code is available in the following directory :
 
-    implementation_android
+    implementation_android/
 
-### PID Regulator
+### PID regulator
 
 The PID regulator listens to the vehicle sensors and send appropriate commands to compensate the vehicle angle error towards its destination. Consequently, the vehicle follow a rather linear trajectory towards its destination. To anticipate the steering angle when the destination is changed, intermediary destination points are added and targeted by the regulator.
 
 In the current context, we could nor reach the autonomous shuttle, thus a vehicle simulator can be run concomitantly with the PID. It listens for commands emitted by the latter via OM2M and sends simulated sensors information. It shows the vehicle movement on a window.
 
-## Project Report
+## Project report
 
 The project report is available on the overleaf platform here :
 [https://www.overleaf.com/8927888864mqkshqjygyjf](https://www.overleaf.com/8927888864mqkshqjygyjf)
