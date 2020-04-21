@@ -1,0 +1,6 @@
+[submodule "implementation"]
+	path = implementation
+	url = https://github.com/SuperTeam1nsa/PIR_website
+[submodule "implementation_android"]
+	path = implementation_android
+	url = https://github.com/SuperTeam1nsa/PIR_androidWebApp
