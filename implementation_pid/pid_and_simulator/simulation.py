@@ -340,20 +340,10 @@ def main_pid_loop(vehicle, circuit):
     previous_error_direction = 0
     total_error_direction = 0
 
-    for pt in circuit.stop_points:
-        print(pt)
-
-    print("\n")
-
-    for i in range(4):
-        print(circuit.aux_points[i][0])
-
-    print("\n")
-
     currently_targeted_stop_point = 0 + int(circuit.clockwise)  # from 0 to 3 (bottom left, top left, top right, bottom right)
     currently_targeted_aux_point = 0  # from 0 to (n_aux_points - 1)
     destination = circuit.aux_points[currently_targeted_stop_point][currently_targeted_aux_point]
-    print(destination)
+    # print(destination)
 
     # pid loop
     # http://www.ferdinandpiette.com/blog/2011/08/implementer-un-pid-sans-faire-de-calculs/
@@ -386,7 +376,7 @@ def main_pid_loop(vehicle, circuit):
                     currently_targeted_stop_point = 0
 
             destination = circuit.aux_points[currently_targeted_stop_point][currently_targeted_aux_point]
-            print(destination)
+            # print(destination)
 
         """
         print("speed = " + str(round(speed, 2)) + "\t\t" + "kp = " + str(
@@ -437,16 +427,6 @@ def main():
         position = Point(85, 20)
         angle = 90
     vehicle = Vehicle(position, angle)
-
-    """
-    if len(sys.argv) < 2:
-        destination = (120, 20)
-    else:
-        destination = (
-            float(sys.argv[1]),
-            float(sys.argv[2])
-        )
-    """
 
     Thread(target=main_pid_loop, args=(vehicle, circuit), daemon=True).start()
     main_simulator(vehicle, circuit)
