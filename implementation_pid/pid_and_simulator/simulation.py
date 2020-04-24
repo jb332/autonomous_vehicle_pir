@@ -12,6 +12,69 @@ import sys
 ### Common ###
 ##############
 
+class Point:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+    def distance_to(self, dest):
+        return math.sqrt((dest.x - self.x) ** 2 + (dest.y - self.y) ** 2)
+
+    def __repr__(self):
+        return "({}, {})".format(self.x, self.y)
+
+
+class Circuit:
+    """
+    This class represents the points of the map on which the car turns
+    """
+
+    def __init__(self, stop_points, n_aux_points, clockwise):
+        radius = 8
+
+        self.stop_points = stop_points
+        self.n_aux_points = n_aux_points
+        self.clockwise = clockwise
+
+        """
+        Calculate for each corner a list of n+1 points which round the edge
+        The edges are in the clockwise order starting with bottom-left, they are reversed if clockwise is false
+        """
+        bot_l = stop_points[0]
+        top_l = stop_points[1]
+        top_r = stop_points[2]
+        bot_r = stop_points[3]
+
+        pi2 = math.pi / 2
+        self.aux_points = [[], [], [], []]
+        centres = [
+            Point(bot_l.x + radius, bot_l.y + radius),
+            Point(top_l.x + radius, top_l.y - radius),
+            Point(top_r.x - radius, top_r.y - radius),
+            Point(bot_r.x - radius, bot_r.y + radius)
+        ]
+
+        radius += 1  # increased radius
+        for k in range(4):
+            aux_points_index_range = range(n_aux_points)
+            if k % 2 == (0 + int(not clockwise)):  # bottom left and top right
+                aux_points_index_range = reversed(aux_points_index_range)
+            for j in aux_points_index_range:
+                x = radius * math.cos((float(j) / (n_aux_points - 1)) * pi2)
+                y = radius * math.sin((float(j) / (n_aux_points - 1)) * pi2)
+                if k < 2:  # left
+                    x *= -1
+                if k == 0 or k == 3:  # bottom
+                    y *= -1
+                self.aux_points[k].append(
+                    Point(centres[k].x + x, centres[k].y + y)
+                )
+
+        if not clockwise:
+            self.stop_points.reverse()
+            self.aux_points.reverse()
+
+
 class Vehicle:
     def __init__(self, position, angle):
         self.position = position
@@ -37,13 +100,13 @@ def compute_angle_difference(angle1, angle2):
 # SimuWindow inherits from Gtk.Window
 class SimuWindow(Gtk.Window):
     # simulation window constructor
-    def __init__(self, window_size, vehicle, scale, points, coefs):
+    def __init__(self, window_size, vehicle, scale, circuit, coefs):
         super(SimuWindow, self).__init__()
 
         vehicle.update_draw = self.queue_draw
         self.vehicle = vehicle
         self.scale = scale
-        self.points = points
+        self.circuit = circuit
         self.coefs = coefs
 
         self.darea = Gtk.DrawingArea()
@@ -58,8 +121,8 @@ class SimuWindow(Gtk.Window):
         self.show_all()
 
     # convert coordinates on the given scale to pixel coordinates on the window
-    def convert_coord(self, position, width, height):
-        x, y = position
+    def convert_coord(self, point, width, height):
+        x, y = point.x, point.y
         x_max, y_max = self.scale
         return (
             width * x / x_max,
@@ -70,21 +133,31 @@ class SimuWindow(Gtk.Window):
     def on_draw(self, wid, cr):
         width, height = self.get_size()
 
-        cr.set_source_rgb(255, 255, 255)
+        cr.set_source_rgb(255, 255, 255)  # draw background in white
         cr.rectangle(0, 0, width, height)
         cr.fill()
 
-        cr.set_source_rgb(0, 0, 0)
         cr.set_line_width(2)
 
         # drawing stop points
-        point_size = self.coefs["point_size"] * min(width, height) / 400
-        for coord in self.points:
-            circ_x, circ_y = self.convert_coord(coord, width, height)
-            cr.arc(circ_x, circ_y, point_size, 0, 2 * math.pi)
+        stop_point_size = self.coefs["point_size"] * min(width, height) / 400
+        cr.set_source_rgb(255, 0, 0)  # draw stop points in red
+        for stop_point in self.circuit.stop_points:
+            circ_x, circ_y = self.convert_coord(stop_point, width, height)
+            cr.arc(circ_x, circ_y, stop_point_size, 0, 2 * math.pi)
             cr.fill()
 
+        # drawing auxiliary points
+        aux_point_size = stop_point_size / 2
+        cr.set_source_rgb(0, 0, 255)  # draw auxiliary points in blue
+        for stop_point_index in range(4):
+            for aux_point in self.circuit.aux_points[stop_point_index]:
+                pt_x, pt_y = self.convert_coord(aux_point, width, height)
+                cr.arc(pt_x, pt_y, aux_point_size, 0, 2 * math.pi)
+                cr.fill()
+
         # drawing the vehicle
+        cr.set_source_rgb(0, 0, 0)  # back to black
         rect_width = self.coefs["rect_size"] * min(width, height) / 200
         rect_height = rect_width * 2
         rect_semi_diag = math.sqrt(rect_width * rect_width + rect_height * rect_height) / 2
@@ -128,10 +201,10 @@ def limit_steer(steer, max_abs):
 
 # compute the new position from the former one, the distance between them and the angle
 def compute_new_position(former_position, distance, angle):
-    x, y = former_position
+    x, y = former_position.x, former_position.y
     delta_x = distance * math.sin(math.radians(angle))
     delta_y = distance * math.cos(math.radians(angle))
-    return (
+    return Point(
         x + delta_x,
         y + delta_y
     )
@@ -152,10 +225,14 @@ def iterate(args_tuple):
     rand_ratio = rand_degrees / 360
     speed_ratio = speed / max_speed
 
-    new_angle = (angle + limit_steer(steer, max_steer) * delta_t) * (1 + rand_ratio * rand_minus_1_plus_1 * speed_ratio) % 360 # REMOVE "% 360"
+    new_angle = (angle + limit_steer(steer, max_steer) * delta_t) * (
+            1 + rand_ratio * rand_minus_1_plus_1 * speed_ratio) % 360
     new_position = compute_new_position(position, delta_d, angle)
 
-    print("\nSIMULATION\t\tangle difference = " + str(round(compute_angle_difference(new_angle, angle), 2)) + "" + "\n\n")
+    """
+    print(
+        "\nSIMULATION\t\tangle difference = " + str(round(compute_angle_difference(new_angle, angle), 2)) + "" + "\n\n")
+    """
 
     vehicle.position = new_position
     vehicle.angle = new_angle
@@ -174,28 +251,23 @@ def simu_loop(vehicle, simu_period, rand_degrees, max_speed, max_steer):
 
 
 # simulation process
-def main_simulator(vehicle):
+def main_simulator(vehicle, circuit):
     # Parameters Begin
-    window_size = (1200, 800)   # size of the window in pixels
-    scale = (150, 100)        # max size of the map in meters for both coordinates, used for scaling
-    points = [                  # coordinates of the points (autonomous vehicle stops)
-        (30, 20),
-        (30, 80),
-        (120, 20),
-        (120, 80)
-    ]
-    coefs = {                   # coefficients used to adjust the size of graphical elements (they are automatically resized when the window is resized)
+    window_size = (1200, 800)  # size of the window in pixels
+    scale = (150, 100)  # max size of the map in meters for both coordinates, used for scaling
+    coefs = {
+        # coefficients used to adjust the size of graphical elements (they are automatically resized when the window is resized)
         "point_size": 4,
         "rect_size": 5
     }
-    simu_period = 0.01          # period between each iteration (delta_t)
-    rand_degrees = 1            # maximum random deviation (in degrees) in the new angle calculation from steer and previous angle (angle is multiplied by : 1 + rand_degrees / 360 * random_minus1_plus1 * speed / max_speed)
-    max_speed = 5               # maximum speed value (speed <= max_speed)
-    max_steer = 45              # maximum steer value (-max_steer <= steer <= max_steer)
+    simu_period = 0.01  # period between each iteration (delta_t)
+    rand_degrees = 1  # maximum random deviation (in degrees) in the new angle calculation from steer and previous angle (angle is multiplied by : 1 + rand_degrees / 360 * random_minus1_plus1 * speed / max_speed)
+    max_speed = 5  # maximum speed value (speed <= max_speed)
+    max_steer = 45  # maximum steer value (-max_steer <= steer <= max_steer)
     # Parameters End
 
     # create the window object used by the graphical library
-    SimuWindow(window_size, vehicle, scale, points, coefs)
+    SimuWindow(window_size, vehicle, scale, circuit, coefs)
 
     # create a thread for the simu_loop() function
     Thread(target=simu_loop, args=(vehicle, simu_period, rand_degrees, max_speed, max_steer), daemon=True).start()
@@ -234,18 +306,13 @@ def compute_direction(x1, y1, x2, y2):
 
 
 # get aimed direction depending on the current and target positions
-def get_aimed_direction(x_pos, y_pos, x_dest, y_dest):
-    return compute_direction(x_pos, y_pos, x_dest, y_dest)
-
-
-# calculate the distance between two points in a cartesian coordinate system
-def compute_distance(x1, y1, x2, y2):
-    return math.sqrt((y2 - y1) ** 2 + (x2 - x1) ** 2)
+def get_aimed_direction(position, destination):
+    return compute_direction(position.x, position.y, destination.x, destination.y)
 
 
 # get aimed speed depending on the distance to target
-def get_aimed_speed(x_pos, y_pos, x_dest, y_dest, stop_distance, max_speed):
-    distance_to_target = compute_distance(x_pos, y_pos, x_dest, y_dest)
+def get_aimed_speed(position, destination, stop_distance, max_speed):
+    distance_to_target = position.distance_to(destination)
     if distance_to_target < stop_distance:
         aimed_speed = distance_to_target * 0.5 - 0.5
         if aimed_speed < 0:
@@ -262,16 +329,31 @@ def compute_direction_error(measured_direction, aimed_direction):
 
 
 # pid process
-def main_pid_loop(vehicle, destination, destination_list):
+def main_pid_loop(vehicle, circuit):
     # Parameters Begin
     pid_period = 0.05
     max_speed = 5
-    stop_distance = 8
+    stop_distance = 1
     k = K(3, 0.1, 10)  # steer pid coefs (kp, ki, kd)
     # Parameters End
 
     previous_error_direction = 0
     total_error_direction = 0
+
+    for pt in circuit.stop_points:
+        print(pt)
+
+    print("\n")
+
+    for i in range(4):
+        print(circuit.aux_points[i][0])
+
+    print("\n")
+
+    currently_targeted_stop_point = 0 + int(circuit.clockwise)  # from 0 to 3 (bottom left, top left, top right, bottom right)
+    currently_targeted_aux_point = 0  # from 0 to (n_aux_points - 1)
+    destination = circuit.aux_points[currently_targeted_stop_point][currently_targeted_aux_point]
+    print(destination)
 
     # pid loop
     # http://www.ferdinandpiette.com/blog/2011/08/implementer-un-pid-sans-faire-de-calculs/
@@ -279,28 +361,40 @@ def main_pid_loop(vehicle, destination, destination_list):
         sleep(pid_period)
 
         current_direction = vehicle.angle
-        x_pos, y_pos = vehicle.position
-        # x_dest, y_dest = destination
-        x_dest, y_dest = destination_list[0]
+        position = vehicle.position
 
         # direction
-        aimed_direction = get_aimed_direction(x_pos, y_pos, x_dest, y_dest)
+        aimed_direction = get_aimed_direction(position, destination)
         error_direction = compute_direction_error(current_direction, aimed_direction)
         total_error_direction += error_direction
 
         steer = \
-                k.p * error_direction + \
-                k.i * total_error_direction + \
-                k.d * (error_direction - previous_error_direction)
+            k.p * error_direction + \
+            k.i * total_error_direction + \
+            k.d * (error_direction - previous_error_direction)
 
-        speed = get_aimed_speed(x_pos, y_pos, x_dest, y_dest, stop_distance, max_speed)
+        speed = get_aimed_speed(position, destination, stop_distance, max_speed)
 
         # destination change
-        distance_to_target = compute_distance(x_pos, y_pos, x_dest, y_dest)
-        if distance_to_target < stop_distance and len(destination_list) > 1:
-            destination_list.pop(0)
+        distance_to_target = position.distance_to(destination)
+        if distance_to_target < stop_distance:
+            currently_targeted_aux_point += 1
+            if currently_targeted_aux_point == circuit.n_aux_points:
+                currently_targeted_aux_point = 0
+                currently_targeted_stop_point += 1
+                if currently_targeted_stop_point == 4:
+                    currently_targeted_stop_point = 0
 
-        print("speed = " + str(round(speed, 2)) + "\t\t" + "kp = " + str(round(k.p * error_direction, 2)) + "\t\t" + "ki = " + str(round(k.i * total_error_direction, 2)) + "\t\t" + "kd = " + str(round(k.d * (error_direction - previous_error_direction), 2)) + "\t\t" + "steer = " + str(round(steer, 2)) + "\n")
+            destination = circuit.aux_points[currently_targeted_stop_point][currently_targeted_aux_point]
+            print(destination)
+
+        """
+        print("speed = " + str(round(speed, 2)) + "\t\t" + "kp = " + str(
+            round(k.p * error_direction, 2)) + "\t\t" + "ki = " + str(
+            round(k.i * total_error_direction, 2)) + "\t\t" + "kd = " + str(
+            round(k.d * (error_direction - previous_error_direction), 2)) + "\t\t" + "steer = " + str(
+            round(steer, 2)) + "\n")
+        """
 
         previous_error_direction = error_direction
 
@@ -313,20 +407,38 @@ def main_pid_loop(vehicle, destination, destination_list):
 ############
 
 def main():
+    # circuit
+    if len(sys.argv) < 2:
+        clockwise = True  # indicate which way the vehicle is gonna turn in the circuit
+    else:
+        if sys.argv[1] == "-r" or sys.argv[1] == "--reversed":
+            clockwise = False
+        else:
+            raise Exception("You must either provide no argument and the vehicle is gonna turn clockwise or provide "
+                            "one argument : \"-r\" or \"--reversed\", and in that case it will turn in the other way")
 
-    position = (30, 20)
-    angle = 0
+    n_aux_points = 7  # number of auxiliary points added at each stop point
+    circuit = Circuit(  # coordinates of the points (autonomous vehicle stops)
+        [
+            Point(30, 20),
+            Point(30, 80),
+            Point(120, 80),
+            Point(120, 20)
+        ],
+        n_aux_points,
+        clockwise
+    )
+
+    # vehicle
+    if clockwise:
+        position = Point(30, 50)
+        angle = 0
+    else:
+        position = Point(85, 20)
+        angle = 90
     vehicle = Vehicle(position, angle)
 
-    destination_list = [
-        (100, 20),
-        (105, 23),
-        (110, 26),
-        (115, 29),
-        (120, 32),
-        (120, 80),
-    ]
-
+    """
     if len(sys.argv) < 2:
         destination = (120, 20)
     else:
@@ -334,71 +446,11 @@ def main():
             float(sys.argv[1]),
             float(sys.argv[2])
         )
+    """
 
-    Thread(target=main_pid_loop, args=(vehicle, destination, destination_list), daemon=True).start()
-    main_simulator(vehicle)
+    Thread(target=main_pid_loop, args=(vehicle, circuit), daemon=True).start()
+    main_simulator(vehicle, circuit)
 
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    # garbage
-
-    """
-    I tried to use pipes, but pipes are bad. So, for now I use multithreading. All those problems should go with OM2M HTTP requests
-
-    commands_in, commands_out = os.pipe()
-    sensors_in, sensors_out = os.pipe()
-    if os.fork() == 0:
-        os.close(sensors_out)
-        os.close(commands_in)
-        #child__pid_loop(sensors_in, commands_out)
-    else:
-        os.close(sensors_in)
-        os.close(commands_out)
-        parent__simulation_window(sensors_out, commands_in)
-    """
-
-
-    """
-    lines = commands.readlines()
-    if len(lines) == 0 or lines[-1].split("\t\t")[0] == "i":
-        print("Warning : no command found in file. Applying default command i.e. speed = 0 and steer = 0")
-        speed = 0.0
-        steer = 0.0
-    else:
-        commands_lst = lines[-1].split("\t\t")
-        speed = float(commands_lst[0])
-        steer = float(commands_lst[1])
-
-    print("speed = " + str(speed) + "\t\tsteer = " + str(steer))
-    """

@@ -31,7 +31,7 @@ The web site is the interface the user will manipulate to select a stop and be t
 
     implementation_web/
 
-There is second way to use the service, using an android application that runs a modified version of the web site as its main view, its source code is available in the following directory :
+There is a second way to use the service, using an android application that runs a modified version of the web site as its main view, its source code is available in the following directory :
 
     implementation_android/
 
