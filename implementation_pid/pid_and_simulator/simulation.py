@@ -57,7 +57,7 @@ class Circuit:
         radius += 1  # increased radius
         for k in range(4):
             aux_points_index_range = range(n_aux_points)
-            if k % 2 == (0 + int(not clockwise)):  # bottom left and top right
+            if k % 2 == int(not clockwise):  # bottom left and top right
                 aux_points_index_range = reversed(aux_points_index_range)
             for j in aux_points_index_range:
                 x = radius * math.cos((float(j) / (n_aux_points - 1)) * pi2)
@@ -71,7 +71,7 @@ class Circuit:
                 )
 
         if not clockwise:
-            self.stop_points.reverse()
+            #self.stop_points.reverse()
             self.aux_points.reverse()
 
 
@@ -109,9 +109,9 @@ class SimuWindow(Gtk.Window):
         self.circuit = circuit
         self.coefs = coefs
 
-        self.darea = Gtk.DrawingArea()
-        self.darea.connect("draw", self.on_draw)
-        self.add(self.darea)
+        darea = Gtk.DrawingArea()
+        darea.connect("draw", self.on_draw)
+        self.add(darea)
 
         self.set_title("Autonomous Vehicle Simulator")
         width, height = window_size
@@ -340,7 +340,7 @@ def main_pid_loop(vehicle, circuit):
     previous_error_direction = 0
     total_error_direction = 0
 
-    currently_targeted_stop_point = 0 + int(circuit.clockwise)  # from 0 to 3 (bottom left, top left, top right, bottom right)
+    currently_targeted_stop_point = int(circuit.clockwise)  # from 0 to 3 (bottom left, top left, top right, bottom right)
     currently_targeted_aux_point = 0  # from 0 to (n_aux_points - 1)
     destination = circuit.aux_points[currently_targeted_stop_point][currently_targeted_aux_point]
     # print(destination)
@@ -424,7 +424,7 @@ def main():
         position = Point(30, 50)
         angle = 0
     else:
-        position = Point(85, 20)
+        position = Point(75, 20)
         angle = 90
     vehicle = Vehicle(position, angle)
 
