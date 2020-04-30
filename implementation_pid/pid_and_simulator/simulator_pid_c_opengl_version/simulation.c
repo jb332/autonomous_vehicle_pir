@@ -128,6 +128,9 @@ int main(int argc, char * argv[]) {
         nanosleep(&t, NULL);
     }
 
+    for(int i=0; i<4; i++) {
+        free(circuit.aux_points[i]);
+    }
     glfwTerminate();
     pthread_cancel(thread_pid);
     return 0;
