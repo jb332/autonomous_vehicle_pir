@@ -1,6 +1,6 @@
-//
-// Created by jb on 29/04/2020.
-//
+/*
+ * Created by jb on 29/04/2020.
+ */
 
 #ifndef SIMULATION_TYPES_H
 #define SIMULATION_TYPES_H
@@ -41,4 +41,4 @@ typedef struct {
 Circuit make_circuit(int n_aux_points, bool clockwise, Point stop_points[]);
 
 
-#endif //SIMULATION_TYPES_H
+#endif /* SIMULATION_TYPES_H */

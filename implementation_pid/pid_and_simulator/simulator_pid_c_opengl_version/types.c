@@ -1,6 +1,6 @@
-//
-// Created by jb on 29/04/2020.
-//
+/*
+ * Created by jb on 29/04/2020.
+ */
 
 #include <stdlib.h>
 #include <math.h>

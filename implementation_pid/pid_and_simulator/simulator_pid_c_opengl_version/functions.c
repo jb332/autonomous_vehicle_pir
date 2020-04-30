@@ -1,6 +1,6 @@
-//
-// Created by jb on 29/04/2020.
-//
+/*
+ * Created by jb on 29/04/2020.
+ */
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -20,30 +20,9 @@ float compute_distance(Point point1, Point point2) {
     );
 }
 
-float modulo_angle_param(float angle, float mod) {
-    if(angle >= mod) {
-        do {
-            angle -= mod;
-        } while(angle >= mod);
-    } else if(angle < 0.0) {
-        do {
-            angle += mod;
-        } while(angle < 0.0);
-    }
-    return angle;
-}
-
-float modulo_angle_deg(float angle) {
-    return modulo_angle_param(angle, 360.0);
-}
-
-float modulo_angle_rad(float angle) {
-    return modulo_angle_param(angle, 2.0 * M_PI);
-}
-
 float compute_angle_difference(float angle1, float angle2) {
-    float delta_angle = modulo_angle_deg(angle1) -
-                        modulo_angle_deg(angle2);
+    float delta_angle = fmod(angle1, 360.0) -
+                        fmod(angle2, 360.0);
 
     if(delta_angle > 180.0) {
         delta_angle -= 360.0;
@@ -96,7 +75,7 @@ float compute_direction(Point point1, Point point2) {
         } else {
             angle = 3.0 * M_PI_2 - atan(a);
         }
-        return angle * 360.0 / (2.0 * M_PI); //rad to deg
+        return angle * 360.0 / (2.0 * M_PI); /* rad to deg */
     }
 }
 

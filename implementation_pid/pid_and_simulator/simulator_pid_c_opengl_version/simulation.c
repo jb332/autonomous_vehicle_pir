@@ -14,7 +14,7 @@
 #include "draw.h"
 #include "pid.h"
 
-void iterate(Vehicle * vehicle, int simu_period, float rand_degrees, float max_speed, float max_steer) {
+void simulate_move(Vehicle * vehicle, int simu_period, float rand_degrees, float max_speed, float max_steer) {
     float delta_t = (float)simu_period / 1000.0;
     float delta_d = vehicle->speed * (float)delta_t;
     float rand_minus_1_plus_1 = 2.0 * (float)rand() / (float)RAND_MAX - 1;
@@ -22,7 +22,7 @@ void iterate(Vehicle * vehicle, int simu_period, float rand_degrees, float max_s
     float speed_ratio = vehicle->speed / max_speed;
 
     float new_angle = (vehicle->angle + limit_steer(vehicle->steer, max_steer) * delta_t) * (1.0 + rand_ratio * rand_minus_1_plus_1 * speed_ratio);
-    new_angle = modulo_angle_deg(new_angle);
+    new_angle = fmod(new_angle, 360.0);
     Point new_position = compute_new_position(vehicle->position, delta_d, vehicle->angle);
 
     vehicle->angle = new_angle;
@@ -103,26 +103,24 @@ int main(int argc, char * argv[]) {
     while(!glfwWindowShouldClose(window)) {
         clock_t start_time = clock();
 
-        //update width and height
+        /* update width and height */
         glfwGetFramebufferSize(window, &width, &height);
 
-        //clear color buffer
+        /* clear color buffer */
         glClear(GL_COLOR_BUFFER_BIT);
 
-        //simulation iteration
-        iterate(&vehicle, simu_period, rand_degrees, max_speed, max_steer);
+        /* simulation iteration */
+        simulate_move(&vehicle, simu_period, rand_degrees, max_speed, max_steer);
 
         draw(width, height, &vehicle, &circuit, (Point){150.0, 100.0});
 
         glfwSwapBuffers(window);
         glfwPollEvents();
 
+        /* wait for the remaining period time */
         clock_t stop_time = clock();
         double elapsed_time = (double)(stop_time - start_time) / CLOCKS_PER_SEC;
         double wait_time_ns = simu_period * 1000000.0 - elapsed_time * 1000000000.0;
-
-
-
         struct timespec t = {
             wait_time_ns / 1000000000.0,
             fmod(wait_time_ns, 1000000000.0)
