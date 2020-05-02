@@ -2,8 +2,8 @@
  * Created by jb on 29/04/2020.
  */
 
-#ifndef SIMULATION_FUNCTIONS_H
-#define SIMULATION_FUNCTIONS_H
+#ifndef FUNCTIONS_H
+#define FUNCTIONS_H
 
 #include "types.h"
 
@@ -32,4 +32,4 @@ float get_aimed_speed(Point position, Point destination, float stop_distance, fl
 float compute_direction_error(float measured_direction, float aimed_direction);
 
 
-#endif /* SIMULATION_FUNCTIONS_H */
+#endif /* FUNCTIONS_H */

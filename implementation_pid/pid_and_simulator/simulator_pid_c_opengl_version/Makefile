@@ -1,16 +1,18 @@
 EXEC=simulation
 
-SRC=simulation.c\
+SRC=main.c\
 	types.c\
 	functions.c\
 	draw.c\
-	pid.c
+	pid.c\
+	simulator.o
 
-OBJ=simulation.o\
+OBJ=main.o\
 	types.o\
 	functions.o\
 	draw.o\
-	pid.o
+	pid.o\
+	simulator.o
 
 
 WARNINGS = -Wall -pedantic

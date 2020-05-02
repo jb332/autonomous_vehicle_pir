@@ -2,9 +2,10 @@
  * Created by jb on 30/04/2020.
  */
 
+#include <pthread.h>
 #include <math.h>
 #ifndef M_PI
-#define M_PI 3.14159265359
+    #define M_PI 3.14159265359
     #define M_PI_2 (M_PI/2.0)
 #endif
 #include "draw.h"
@@ -126,7 +127,7 @@ static void draw_disk_segments(float centre_x, float centre_y, float radius) {
     glDisable(GL_BLEND);
 }
 
-void draw(int width, int height, Vehicle * vehicle, Circuit * circuit, Point scale) {
+void draw(int width, int height, Vehicle * vehicle_ptr, Circuit * circuit_ptr, Point scale, pthread_mutex_t * mutex_sensors_ptr) {
     glViewport(0.0f, 0.0f, width, height);
 
     glMatrixMode(GL_PROJECTION);
@@ -147,7 +148,7 @@ void draw(int width, int height, Vehicle * vehicle, Circuit * circuit, Point sca
     float stop_point_size = (float)coef_point_size * fmin((float)width, (float)height) / 400.0;
     for(int i=0; i<4; i++) {
         int circ_x, circ_y;
-        convert_coordinates(circuit->stop_points[i], scale, width, height, &circ_x, &circ_y);
+        convert_coordinates(circuit_ptr->stop_points[i], scale, width, height, &circ_x, &circ_y);
         draw_disk_mid_point(circ_x, circ_y, (float) stop_point_size);
     }
 
@@ -155,9 +156,9 @@ void draw(int width, int height, Vehicle * vehicle, Circuit * circuit, Point sca
     glColor3d(0, 0, 255);
     float aux_point_size = stop_point_size / 2.0;
     for(int i=0; i<4; i++) {
-        for(int j=0; j<circuit->n_aux_points; j++) {
+        for(int j=0; j<circuit_ptr->n_aux_points; j++) {
             int circ_x, circ_y;
-            convert_coordinates(circuit->aux_points[i][j], scale, width, height, &circ_x, &circ_y);
+            convert_coordinates(circuit_ptr->aux_points[i][j], scale, width, height, &circ_x, &circ_y);
             draw_disk_segments(circ_x, circ_y, (float) aux_point_size);
         }
     }
@@ -174,8 +175,14 @@ void draw(int width, int height, Vehicle * vehicle, Circuit * circuit, Point sca
     float rect_angle_top_left = -rect_angle_top_right;
 
     int rect_x, rect_y;
-    convert_coordinates(vehicle->position, scale, width, height, &rect_x, &rect_y);
-    float rect_angle = (float)(vehicle->angle) * 2.0 * M_PI / 360.0; /* deg to rad */
+
+    pthread_mutex_lock(mutex_sensors_ptr);
+    Point position = vehicle_ptr->position;
+    float angle = vehicle_ptr->angle;
+    pthread_mutex_unlock(mutex_sensors_ptr);
+
+    convert_coordinates(position, scale, width, height, &rect_x, &rect_y);
+    float rect_angle = (float)(angle) * 2.0 * M_PI / 360.0; /* deg to rad */
 
     float rect_x1 = rect_x + sin(fmod(rect_angle - rect_angle_top_right, 2.0 * M_PI)) * rect_semi_diag;
     float rect_y1 = rect_y - cos(fmod(rect_angle - rect_angle_top_right, 2.0 * M_PI)) * rect_semi_diag;
