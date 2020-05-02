@@ -1,7 +1,7 @@
 from gi import require_version
 require_version('Gtk', '3.0')
 from gi.repository import Gtk, GLib
-from threading import Thread
+from threading import Thread, RLock
 from time import sleep
 import math
 import random
@@ -100,7 +100,7 @@ def compute_angle_difference(angle1, angle2):
 # SimuWindow inherits from Gtk.Window
 class SimuWindow(Gtk.Window):
     # simulation window constructor
-    def __init__(self, window_size, vehicle, scale, circuit, coefs):
+    def __init__(self, window_size, vehicle, scale, circuit, coefs, sensors_lock):
         super(SimuWindow, self).__init__()
 
         vehicle.update_draw = self.queue_draw
@@ -108,6 +108,7 @@ class SimuWindow(Gtk.Window):
         self.scale = scale
         self.circuit = circuit
         self.coefs = coefs
+        self.sensors_lock = sensors_lock
 
         darea = Gtk.DrawingArea()
         darea.connect("draw", self.on_draw)
@@ -167,8 +168,12 @@ class SimuWindow(Gtk.Window):
         rect_angle_bottom_left = -rect_angle_bottom_right
         rect_angle_top_left = -rect_angle_top_right
 
-        rect_x, rect_y = self.convert_coord(self.vehicle.position, width, height)
-        rect_angle = math.radians(self.vehicle.angle)
+        with self.sensors_lock:
+            position = self.vehicle.position
+            angle = self.vehicle.angle
+
+        rect_x, rect_y = self.convert_coord(position, width, height)
+        rect_angle = math.radians(angle)
 
         rect_x1 = rect_x + math.sin((rect_angle - rect_angle_top_right) % (2 * math.pi)) * rect_semi_diag
         rect_y1 = rect_y - math.cos((rect_angle - rect_angle_top_right) % (2 * math.pi)) * rect_semi_diag
@@ -212,13 +217,15 @@ def compute_new_position(former_position, distance, angle):
 
 # iteration
 def iterate(args_tuple):
-    vehicle, delta_t, rand_degrees, max_speed, max_steer, i = args_tuple
+    vehicle, delta_t, rand_degrees, max_speed, max_steer, sensors_lock, commands_lock, i = args_tuple
 
-    position = vehicle.position
-    angle = vehicle.angle
+    with sensors_lock:
+        position = vehicle.position
+        angle = vehicle.angle
 
-    speed = vehicle.speed
-    steer = vehicle.steer
+    with commands_lock:
+        speed = vehicle.speed
+        steer = vehicle.steer
 
     delta_d = speed * delta_t
     rand_minus_1_plus_1 = 2 * random.random() - 1
@@ -234,24 +241,25 @@ def iterate(args_tuple):
         "\nSIMULATION\t\tangle difference = " + str(round(compute_angle_difference(new_angle, angle), 2)) + "" + "\n\n")
     """
 
-    vehicle.position = new_position
-    vehicle.angle = new_angle
+    with sensors_lock:
+        vehicle.position = new_position
+        vehicle.angle = new_angle
 
     vehicle.update_draw()
 
 
 # loop that periodically adds the iterate() function to gtk queued tasks
-def simu_loop(vehicle, simu_period, rand_degrees, max_speed, max_steer):
+def simu_loop(vehicle, simu_period, rand_degrees, max_speed, max_steer, sensors_lock, commands_lock):
     random.seed(42)
     i = 1
     while True:
         sleep(simu_period)
-        GLib.idle_add(iterate, (vehicle, simu_period, rand_degrees, max_speed, max_steer, i))
+        GLib.idle_add(iterate, (vehicle, simu_period, rand_degrees, max_speed, max_steer, sensors_lock, commands_lock, i))
         i += 1
 
 
 # simulation process
-def main_simulator(vehicle, circuit):
+def main_simulator(vehicle, circuit, sensors_lock, commands_lock):
     # Parameters Begin
     window_size = (1200, 800)  # size of the window in pixels
     scale = (150, 100)  # max size of the map in meters for both coordinates, used for scaling
@@ -267,10 +275,10 @@ def main_simulator(vehicle, circuit):
     # Parameters End
 
     # create the window object used by the graphical library
-    SimuWindow(window_size, vehicle, scale, circuit, coefs)
+    SimuWindow(window_size, vehicle, scale, circuit, coefs, sensors_lock)
 
     # create a thread for the simu_loop() function
-    Thread(target=simu_loop, args=(vehicle, simu_period, rand_degrees, max_speed, max_steer), daemon=True).start()
+    Thread(target=simu_loop, args=(vehicle, simu_period, rand_degrees, max_speed, max_steer, sensors_lock, commands_lock), daemon=True).start()
     # launches the graphical simulator application
     Gtk.main()
 
@@ -329,7 +337,7 @@ def compute_direction_error(measured_direction, aimed_direction):
 
 
 # pid process
-def main_pid_loop(vehicle, circuit):
+def main_pid_loop(vehicle, circuit, sensors_lock, commands_lock):
     # Parameters Begin
     pid_period = 0.05
     max_speed = 5
@@ -350,8 +358,9 @@ def main_pid_loop(vehicle, circuit):
     while True:
         sleep(pid_period)
 
-        current_direction = vehicle.angle
-        position = vehicle.position
+        with sensors_lock:
+            current_direction = vehicle.angle
+            position = vehicle.position
 
         # direction
         aimed_direction = get_aimed_direction(position, destination)
@@ -388,8 +397,9 @@ def main_pid_loop(vehicle, circuit):
 
         previous_error_direction = error_direction
 
-        vehicle.speed = speed
-        vehicle.steer = steer
+        with commands_lock:
+            vehicle.speed = speed
+            vehicle.steer = steer
 
 
 ############
@@ -428,8 +438,12 @@ def main():
         angle = 90
     vehicle = Vehicle(position, angle)
 
-    Thread(target=main_pid_loop, args=(vehicle, circuit), daemon=True).start()
-    main_simulator(vehicle, circuit)
+    # mutex
+    sensors_lock = RLock()
+    commands_lock = RLock()
+
+    Thread(target=main_pid_loop, args=(vehicle, circuit, sensors_lock, commands_lock), daemon=True).start()
+    main_simulator(vehicle, circuit, sensors_lock, commands_lock)
 
 
 if __name__ == "__main__":
