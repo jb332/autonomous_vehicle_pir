@@ -2,6 +2,7 @@
  * Created by jb on 29/04/2020.
  */
 
+#include <stdio.h> //TO REMOVE
 #include <stdlib.h>
 #include <stdbool.h>
 #include <time.h>
@@ -50,7 +51,7 @@ void * simulator_loop(void * args) {
     srand(42);
 
     /* Begin Simulator Parameters */
-    int simu_period = 10;       /* period between each iteration in ms (delta_t) */
+    int simu_period = 20;       /* period between each iteration in ms (delta_t), note : going below 20 is useless because opengl does not follow */
     float rand_degrees = 1.0;   /* maximum random deviation (in degrees) in the new angle calculation from steer and previous angle (angle is multiplied by : 1 + rand_degrees / 360 * random_minus1_plus1 * speed / max_speed) */
     float max_speed = 5.0;      /* maximum speed value (speed <= max_speed) */
     float max_steer = 45.0;     /* maximum steer value (-max_steer <= steer <= max_steer) */
@@ -59,6 +60,8 @@ void * simulator_loop(void * args) {
     Vehicle * vehicle_ptr = ((Vehicle **)args)[0];
     pthread_mutex_t * mutex_sensors_ptr = ((pthread_mutex_t **)args)[1];
     pthread_mutex_t * mutex_commands_ptr = ((pthread_mutex_t **)args)[2];
+    pthread_mutex_t * mutex_draw_event_ptr = ((pthread_mutex_t **)args)[3];
+    pthread_cond_t * draw_event_ptr = ((pthread_cond_t **)args)[4];
     
 
     while(true) {
@@ -66,6 +69,11 @@ void * simulator_loop(void * args) {
 
 	simulate_move(vehicle_ptr, simu_period, rand_degrees, max_speed, max_steer, mutex_sensors_ptr, mutex_commands_ptr);
         
+        /* trigger draw event */
+        pthread_mutex_lock(mutex_draw_event_ptr);
+        pthread_cond_signal(draw_event_ptr);
+        pthread_mutex_unlock(mutex_draw_event_ptr);
+
         /* wait for the remaining period time */
         clock_t stop_time = clock();
         double elapsed_time = (double)(stop_time - start_time) / CLOCKS_PER_SEC;
@@ -76,7 +84,6 @@ void * simulator_loop(void * args) {
         };
         nanosleep(&t, NULL);
     }
-    return NULL;
 
     return NULL;
 }

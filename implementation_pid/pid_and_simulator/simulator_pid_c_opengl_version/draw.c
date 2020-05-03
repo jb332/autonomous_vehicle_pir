@@ -2,7 +2,7 @@
  * Created by jb on 30/04/2020.
  */
 
-#include <pthread.h>
+#include <stdio.h>
 #include <math.h>
 #ifndef M_PI
     #define M_PI 3.14159265359
@@ -14,32 +14,16 @@
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 
-static void draw_line(float x1, float y1, float x2, float y2, int width) {
-    GLfloat lineVertices[] = {
-            x1, y1, 0.0,
-            x2, y2, 0.0
-    };
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glEnable(GL_LINE_SMOOTH);
-
-    glPushAttrib(GL_LINE_BIT);
-    glLineWidth(width);
-    glLineStipple(1, 0x00FF);
-    glEnableClientState(GL_VERTEX_ARRAY);
-    glVertexPointer(3, GL_FLOAT,0, lineVertices);
-    glDrawArrays(GL_LINES, 0, 2);
-    glDisableClientState(GL_VERTEX_ARRAY);
-    glPopAttrib();
-
-    glLineWidth(1);
-    glDisable(GL_LINE_SMOOTH);
-    glDisable(GL_BLEND);
+static void draw_line(float x1, float y1, float x2, float y2) {
+    glBegin(GL_LINES);
+    glVertex2f(x1, y1);
+    glVertex2f(x2, y2);
+    glEnd();
 }
 
 static void plot_point(float x, float y) {
     glBegin(GL_POINTS);
-    glVertex2i(x, y);
+    glVertex2f(x, y);
     glEnd();
 }
 
@@ -106,13 +90,9 @@ static void draw_disk_mid_point(float centre_x, float centre_y, float radius) {
 static void draw_disk_segments(float centre_x, float centre_y, float radius) {
     int num_segments = 42; /* number of segments used to draw the circle */
 
-    glDisable(GL_DEPTH_TEST);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    int formerPolygonMode;
+    glGetIntegerv(GL_POLYGON_MODE, &formerPolygonMode);
     glPolygonMode(GL_FRONT, GL_FILL);
-    glEnable(GL_POLYGON_SMOOTH);
-    glHint(GL_POLYGON_SMOOTH_HINT, GL_NICEST);
-
     glBegin(GL_POLYGON);
     for(int i = 0; i < num_segments; i++)
     {
@@ -122,12 +102,37 @@ static void draw_disk_segments(float centre_x, float centre_y, float radius) {
         glVertex2f(x + centre_x, y + centre_y);
     }
     glEnd();
-
-    glDisable(GL_POLYGON_SMOOTH);
-    glDisable(GL_BLEND);
+    glPolygonMode(GL_FRONT, formerPolygonMode);
 }
 
-void draw(int width, int height, Vehicle * vehicle_ptr, Circuit * circuit_ptr, Point scale, pthread_mutex_t * mutex_sensors_ptr) {
+static void draw_disk(float centre_x, float centre_y, float radius, bool segments_mode) {
+    if(segments_mode) {
+        draw_disk_segments(centre_x, centre_y, radius);
+    } else {
+        draw_disk_mid_point(centre_x, centre_y, radius);
+    }
+}
+
+static void activate_antialiasing() {
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    glEnable(GL_POINT_SMOOTH);
+    glEnable(GL_LINE_SMOOTH);
+    glEnable(GL_POLYGON_SMOOTH);
+
+    glHint(GL_POINT_SMOOTH_HINT, GL_NICEST);
+    glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
+    glHint(GL_POLYGON_SMOOTH_HINT, GL_NICEST);
+}
+
+static void draw(int               width,
+                 int               height,
+                 Vehicle *         vehicle_ptr,
+                 Circuit *         circuit_ptr,
+                 Point             scale,
+                 pthread_mutex_t * mutex_sensors_ptr)
+{
     glViewport(0.0f, 0.0f, width, height);
 
     glMatrixMode(GL_PROJECTION);
@@ -149,7 +154,7 @@ void draw(int width, int height, Vehicle * vehicle_ptr, Circuit * circuit_ptr, P
     for(int i=0; i<4; i++) {
         int circ_x, circ_y;
         convert_coordinates(circuit_ptr->stop_points[i], scale, width, height, &circ_x, &circ_y);
-        draw_disk_mid_point(circ_x, circ_y, (float) stop_point_size);
+        draw_disk(circ_x, circ_y, (float) stop_point_size, true);
     }
 
     /* drawing auxiliary points */
@@ -159,7 +164,7 @@ void draw(int width, int height, Vehicle * vehicle_ptr, Circuit * circuit_ptr, P
         for(int j=0; j<circuit_ptr->n_aux_points; j++) {
             int circ_x, circ_y;
             convert_coordinates(circuit_ptr->aux_points[i][j], scale, width, height, &circ_x, &circ_y);
-            draw_disk_segments(circ_x, circ_y, (float) aux_point_size);
+            draw_disk(circ_x, circ_y, (float) aux_point_size, true);
         }
     }
 
@@ -195,9 +200,64 @@ void draw(int width, int height, Vehicle * vehicle_ptr, Circuit * circuit_ptr, P
     float rect_x5 = rect_x + sin(rect_angle) * rect_semi_diag * 5.0 / 4.0;
     float rect_y5 = rect_y - cos(rect_angle) * rect_semi_diag * 5.0 / 4.0;
 
-    draw_line(rect_x1, rect_y1, rect_x2, rect_y2, 2);
-    draw_line(rect_x2, rect_y2, rect_x3, rect_y3, 2);
-    draw_line(rect_x3, rect_y3, rect_x4, rect_y4, 2);
-    draw_line(rect_x4, rect_y4, rect_x5, rect_y5, 2);
-    draw_line(rect_x5, rect_y5, rect_x1, rect_y1, 2);
+    glLineWidth(2.0);
+    draw_line(rect_x1, rect_y1, rect_x2, rect_y2);
+    draw_line(rect_x2, rect_y2, rect_x3, rect_y3);
+    draw_line(rect_x3, rect_y3, rect_x4, rect_y4);
+    draw_line(rect_x4, rect_y4, rect_x5, rect_y5);
+    draw_line(rect_x5, rect_y5, rect_x1, rect_y1);
+    glLineWidth(1.0);
+}
+
+int draw_loop(Vehicle *         vehicle_ptr,
+              Circuit *         circuit_ptr,
+              pthread_mutex_t * mutex_sensors_ptr,
+              pthread_mutex_t * mutex_draw_event_ptr,
+              pthread_cond_t *  draw_event_ptr)
+{
+    /* Begin Graphical Parameters */
+    int width = 1200;             /* window width in pixels */
+    int height = 800;             /* window height in pixels */
+    Point scale = {150.0, 100.0}; /* scale (max coordinates) */
+    /* End Graphical Parameters */
+
+    /* OpenGL */
+    if(!glfwInit()) {
+        fprintf(stderr, "Error : failed to initialize GLFW\n");
+        return -1;
+    }
+
+    GLFWwindow * window = glfwCreateWindow(width, height, "Autonomous Vehicle Simulator", NULL, NULL);
+    if(window == NULL) {
+        fprintf(stderr, "Error : failed to open a GLFW window\n");
+        glfwTerminate();
+        return -1;
+    }
+
+    glfwMakeContextCurrent(window);
+
+    /* does not work on any configuration ! */
+    activate_antialiasing();
+
+    while(!glfwWindowShouldClose(window)) {
+        /* wait for draw event */
+        pthread_mutex_lock(mutex_draw_event_ptr);
+        pthread_cond_wait(draw_event_ptr, mutex_draw_event_ptr);
+        pthread_mutex_unlock(mutex_draw_event_ptr);
+
+        /* update width and height */
+        glfwGetFramebufferSize(window, &width, &height);
+
+        /* clear color buffer */
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        draw(width, height, vehicle_ptr, circuit_ptr, scale, mutex_sensors_ptr);
+
+        glfwSwapBuffers(window);
+        glfwPollEvents();
+    }
+
+    glfwTerminate();
+
+    return 0;
 }
