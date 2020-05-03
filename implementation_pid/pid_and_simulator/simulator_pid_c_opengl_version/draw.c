@@ -133,14 +133,21 @@ static void draw(int               width,
                  Point             scale,
                  pthread_mutex_t * mutex_sensors_ptr)
 {
-    glViewport(0.0f, 0.0f, width, height);
+    static int previous_width = -1;
+    static int previous_height = -1;
+    if(width != previous_width || height != previous_height) {
+        glViewport(0.0, 0.0, width, height);
 
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
-    glOrtho(0, width, height, 0, 0, 1);
+        glMatrixMode(GL_PROJECTION);
+        glLoadIdentity();
+        glOrtho(0, width, height, 0, 0, 1);
 
-    glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity();
+        glMatrixMode(GL_MODELVIEW);
+        glLoadIdentity();
+
+        previous_width = width;
+        previous_height = height;
+    }
 
     int coef_point_size = 4;
     int coef_rect_size = 5;
