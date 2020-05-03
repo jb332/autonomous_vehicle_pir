@@ -5,6 +5,7 @@
 #include <stdbool.h>
 #include <time.h>
 #include <pthread.h>
+#include <math.h>
 
 #include "pid.h"
 #include "types.h"
@@ -15,6 +16,8 @@ void * pid_loop(void * args) {
     Circuit * circuit_ptr = ((Circuit **)args)[1];
     pthread_mutex_t * mutex_sensors_ptr = ((pthread_mutex_t **)args)[2];
     pthread_mutex_t * mutex_commands_ptr = ((pthread_mutex_t **)args)[3];
+    pthread_mutex_t * mutex_shutdown_ptr = ((pthread_mutex_t **)args)[4];
+    bool * shutdown_ptr = ((bool **)args)[5];
 
     /* Parameters PID Begin */
     int pid_period = 50;
@@ -33,9 +36,9 @@ void * pid_loop(void * args) {
     Point destination = circuit_ptr->aux_points[currently_targeted_stop_point][currently_targeted_aux_point];
 
     /* pid loop */
-    while(true) {
-        struct timespec t = {0, pid_period * 1000000};
-        nanosleep(&t, NULL);
+    bool finished = false;
+    while(!finished) {
+        clock_t start_time = clock();
 
         /* direction */
 	pthread_mutex_lock(mutex_sensors_ptr);
@@ -74,6 +77,23 @@ void * pid_loop(void * args) {
         vehicle_ptr->speed = speed;
         vehicle_ptr->steer = steer;
 	pthread_mutex_unlock(mutex_commands_ptr);
+
+        /* wait for the remaining period time */
+        clock_t stop_time = clock();
+        double elapsed_time = (double)(stop_time - start_time) / CLOCKS_PER_SEC;
+        double wait_time_ns = pid_period * 1000000.0 - elapsed_time * 1000000000.0;
+        struct timespec t = {
+            wait_time_ns / 1000000000.0,
+            fmod(wait_time_ns, 1000000000.0)
+        };
+        nanosleep(&t, NULL);
+
+        /* check for shutdown order */
+        pthread_mutex_lock(mutex_shutdown_ptr);
+        if(*shutdown_ptr) {
+            finished = true;
+        }
+        pthread_mutex_unlock(mutex_shutdown_ptr);
     }
     return NULL;
 }

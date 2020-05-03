@@ -61,10 +61,13 @@ void * simulator_loop(void * args) {
     pthread_mutex_t * mutex_sensors_ptr = ((pthread_mutex_t **)args)[1];
     pthread_mutex_t * mutex_commands_ptr = ((pthread_mutex_t **)args)[2];
     pthread_mutex_t * mutex_draw_event_ptr = ((pthread_mutex_t **)args)[3];
-    pthread_cond_t * draw_event_ptr = ((pthread_cond_t **)args)[4];
+    pthread_mutex_t * mutex_shutdown_ptr = ((pthread_mutex_t **)args)[4];
+    pthread_cond_t * draw_event_ptr = ((pthread_cond_t **)args)[5];
+    bool * shutdown_ptr = ((bool **)args)[6];
     
-
-    while(true) {
+    /* simulation loop */
+    bool finished = false;
+    while(!finished) {
         clock_t start_time = clock();
 
 	simulate_move(vehicle_ptr, simu_period, rand_degrees, max_speed, max_steer, mutex_sensors_ptr, mutex_commands_ptr);
@@ -83,6 +86,13 @@ void * simulator_loop(void * args) {
             fmod(wait_time_ns, 1000000000.0)
         };
         nanosleep(&t, NULL);
+
+        /* check for shutdown order */
+        pthread_mutex_lock(mutex_shutdown_ptr);
+        if(*shutdown_ptr) {
+            finished = true;
+        }
+        pthread_mutex_unlock(mutex_shutdown_ptr);
     }
 
     return NULL;

@@ -54,30 +54,39 @@ int main(int argc, char * argv[]) {
     pthread_mutex_t mutex_sensors;
     pthread_mutex_t mutex_commands;
     pthread_mutex_t mutex_draw_event;
+    pthread_mutex_t mutex_shutdown;
     pthread_mutex_init(&mutex_sensors, NULL);
     pthread_mutex_init(&mutex_commands, NULL);
     pthread_mutex_init(&mutex_draw_event, NULL);
+    pthread_mutex_init(&mutex_shutdown, NULL);
 
     /* Conditions */
     pthread_cond_t draw_event;
     pthread_cond_init(&draw_event, NULL);
 
+    /* Shutdown boolean */
+    bool shutdown = false;
+
     /* Start PID loop */
-    void * args_pid[4];
+    void * args_pid[6];
     args_pid[0] = &vehicle;
     args_pid[1] = &circuit;
     args_pid[2] = &mutex_sensors;
     args_pid[3] = &mutex_commands;
+    args_pid[4] = &mutex_shutdown;
+    args_pid[5] = &shutdown;
     pthread_t thread_pid;
     pthread_create(&thread_pid, NULL, pid_loop, args_pid);
 
     /* Start Simulator loop */
-    void * args_simu[5];
+    void * args_simu[7];
     args_simu[0] = &vehicle;
     args_simu[1] = &mutex_sensors;
     args_simu[2] = &mutex_commands;
     args_simu[3] = &mutex_draw_event;
-    args_simu[4] = &draw_event;
+    args_simu[4] = &mutex_shutdown;
+    args_simu[5] = &draw_event;
+    args_simu[6] = &shutdown;
     pthread_t thread_simulator;
     pthread_create(&thread_simulator, NULL, simulator_loop, args_simu);
 
@@ -85,10 +94,16 @@ int main(int argc, char * argv[]) {
     int status = draw_loop(&vehicle, &circuit, &mutex_sensors, &mutex_draw_event, &draw_event);
 
     /* Shutdown */
-    pthread_cancel(thread_pid);
-    pthread_cancel(thread_simulator);
+    pthread_mutex_lock(&mutex_shutdown);
+    shutdown = true;
+    pthread_mutex_unlock(&mutex_shutdown);
+    pthread_join(thread_pid, NULL);
+    pthread_join(thread_simulator, NULL);
+
     pthread_mutex_destroy(&mutex_sensors);
     pthread_mutex_destroy(&mutex_commands);
+    pthread_mutex_destroy(&mutex_draw_event);
+    pthread_mutex_destroy(&mutex_shutdown);
     for(int i=0; i<4; i++) {
         free(circuit.aux_points[i]);
     }
