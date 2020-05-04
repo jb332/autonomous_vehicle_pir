@@ -66,3 +66,9 @@ Circuit make_circuit(int n_aux_points, bool clockwise, Point stop_points[]) {
 
     return circuit;
 }
+
+void free_circuit(Circuit * circuit_ptr) {
+    for(int i = 0; i < 4; i++) {
+        free(circuit_ptr->aux_points[i]);
+    }
+}

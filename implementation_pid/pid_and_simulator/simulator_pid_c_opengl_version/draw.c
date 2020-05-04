@@ -266,7 +266,7 @@ int draw_loop(Vehicle *         vehicle_ptr,
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
-
+    glfwDestroyWindow(window);
     glfwTerminate();
 
     return 0;

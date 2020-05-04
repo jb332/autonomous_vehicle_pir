@@ -38,8 +38,10 @@ typedef struct {
     Point * aux_points[4];
 } Circuit;
 
-/* pseudo-constructor for the circuit type */
+/* pseudo-constructor for the "Circuit" type */
 Circuit make_circuit(int n_aux_points, bool clockwise, Point stop_points[]);
 
+/* pseudo-destructor for the "Circuit" type */
+void free_circuit(Circuit * circuit_ptr);
 
 #endif /* SIMULATION_TYPES_H */

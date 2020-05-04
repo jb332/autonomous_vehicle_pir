@@ -106,9 +106,7 @@ int main(int argc, char * argv[]) {
     pthread_mutex_destroy(&mutex_draw_event);
     pthread_mutex_destroy(&mutex_shutdown);
     pthread_cond_destroy(&draw_event);
-    for(int i=0; i<4; i++) {
-        free(circuit.aux_points[i]);
-    }
+    free_circuit(&circuit);
 
     return status;
 }
