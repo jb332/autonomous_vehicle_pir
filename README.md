@@ -29,11 +29,11 @@ The project has been divided into two main modules :
 
 The web site is the interface the user will manipulate to select a stop and be transported by the shuttle. You can find more details in the web site submodule README file located in the following directory  :
 
-    implementation\_web/
+    implementation&#95;web/
 
 There is a second way to use the service, using an android application that runs a modified version of the web site as its main view, its source code is available in the following directory :
 
-    implementation\_android/
+    implementation&#95;android/
 
 ### PID regulator
 
@@ -48,7 +48,7 @@ There are 3 versions of the PID / simulator :
 
 Their source code is available in the following directory :
 
-    implementation\_pid/pid\_and\_simulator/
+    implementation&#95;pid/pid&#95;and&#95;simulator/
 
 You will find a README file for each version.
 
