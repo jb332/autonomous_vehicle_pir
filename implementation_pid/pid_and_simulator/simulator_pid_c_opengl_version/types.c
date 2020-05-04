@@ -11,6 +11,7 @@
 
 #include "types.h"
 
+
 Circuit make_circuit(int n_aux_points, bool clockwise, Point stop_points[]) {
     Circuit circuit;
     circuit.n_aux_points = n_aux_points;
@@ -23,14 +24,14 @@ Circuit make_circuit(int n_aux_points, bool clockwise, Point stop_points[]) {
         ];
     }
 
-    for(int i=0; i<4; i++) {
+    for(int i = 0; i < 4; i++) {
         circuit.aux_points[i] = malloc(n_aux_points * sizeof(Point));
     }
 
     int radius = 8;
 
     Point centres[4];
-    for(int i=0; i<4; i++) {
+    for(int i = 0; i < 4; i++) {
         centres[i] = (Point) {
                 stop_points[i].x + (float) ((1 - 2 * (i > 1)) * radius),           /* x + radius if left,   x - radius if right */
                 stop_points[i].y + (float) ((1 - 2 * (i == 1 || i == 2)) * radius) /* y + radius if bottom, y - radius if top */
@@ -38,7 +39,7 @@ Circuit make_circuit(int n_aux_points, bool clockwise, Point stop_points[]) {
     }
 
     radius++; /* increased radius */
-    for(int i=0; i<4; i++) {
+    for(int i = 0; i < 4; i++) {
         bool reversed = i % 2 == (int)(!clockwise);
         for(int j=0; j<n_aux_points; j++) {
             float angle = (float)j / (float)(n_aux_points - 1) * M_PI_2;

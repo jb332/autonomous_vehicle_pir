@@ -12,6 +12,7 @@
 
 #include "functions.h"
 
+
 /****** common ******/
 float compute_distance(Point point1, Point point2) {
     return sqrt(

@@ -29,17 +29,30 @@ The project has been divided into two main modules :
 
 The web site is the interface the user will manipulate to select a stop and be transported by the shuttle. You can find more details in the web site submodule README file located in the following directory  :
 
-    implementation_web/
+    implementation\_web/
 
 There is a second way to use the service, using an android application that runs a modified version of the web site as its main view, its source code is available in the following directory :
 
-    implementation_android/
+    implementation\_android/
 
 ### PID regulator
 
 The PID regulator listens to the vehicle sensors and send appropriate commands to compensate the vehicle angle error towards its destination. Consequently, the vehicle follow a rather linear trajectory towards its destination. To anticipate the steering angle when the destination is changed, intermediary destination points are added and targeted by the regulator.
 
 In the current context, we could nor reach the autonomous shuttle, thus a vehicle simulator can be run concomitantly with the PID. It listens for commands emitted by the latter via OM2M and sends simulated sensors information. It shows the vehicle movement on a window.
+
+There are 3 versions of the PID / simulator :
+ - Python / Gtk+ (via PyGObject)
+ - C / Gtk+ / GObject / Glib (**this version includes neither mutex nor proper thread termination**)
+ - C / OpenGL / pthread
+
+Their source code is available in the following directory :
+
+    implementation\_pid/pid\_and\_simulator/
+
+You will find a README file for each version.
+
+*Note : We recommend that you use either the first version or the third.*
 
 ## Project report
 

@@ -8,6 +8,7 @@
 #include <pthread.h>
 #include "types.h"
 
+
 int draw_loop(Vehicle *         vehicle_ptr,
               Circuit *         circuit_ptr,
               pthread_mutex_t * mutex_sensors_ptr,

@@ -14,6 +14,7 @@
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 
+
 static void draw_line(float x1, float y1, float x2, float y2) {
     glBegin(GL_LINES);
     glVertex2f(x1, y1);
@@ -28,7 +29,7 @@ static void plot_point(float x, float y) {
 }
 
 static void plot_points(float centre_x, float centre_y, float x, float y) {
-    for(int i=y; i>=x; i--) {
+    for(int i = y; i >= x; i--) {
         plot_point(centre_x+x, centre_y+i);
         plot_point(centre_x-x, centre_y+i);
         plot_point(centre_x+x, centre_y-i);
@@ -94,8 +95,7 @@ static void draw_disk_segments(float centre_x, float centre_y, float radius) {
     glGetIntegerv(GL_POLYGON_MODE, &formerPolygonMode);
     glPolygonMode(GL_FRONT, GL_FILL);
     glBegin(GL_POLYGON);
-    for(int i = 0; i < num_segments; i++)
-    {
+    for(int i = 0; i < num_segments; i++) {
         float angle = 2.0 * M_PI * (float)i / (float)num_segments;
         float x = radius * cos(angle);
         float y = radius * sin(angle);
@@ -158,7 +158,7 @@ static void draw(int               width,
     /* drawing stop points */
     glColor3d(255, 0, 0);
     float stop_point_size = (float)coef_point_size * fmin((float)width, (float)height) / 400.0;
-    for(int i=0; i<4; i++) {
+    for(int i = 0; i < 4; i++) {
         int circ_x, circ_y;
         convert_coordinates(circuit_ptr->stop_points[i], scale, width, height, &circ_x, &circ_y);
         draw_disk(circ_x, circ_y, (float) stop_point_size, true);
@@ -167,8 +167,8 @@ static void draw(int               width,
     /* drawing auxiliary points */
     glColor3d(0, 0, 255);
     float aux_point_size = stop_point_size / 2.0;
-    for(int i=0; i<4; i++) {
-        for(int j=0; j<circuit_ptr->n_aux_points; j++) {
+    for(int i = 0; i < 4; i++) {
+        for(int j = 0; j < circuit_ptr->n_aux_points; j++) {
             int circ_x, circ_y;
             convert_coordinates(circuit_ptr->aux_points[i][j], scale, width, height, &circ_x, &circ_y);
             draw_disk(circ_x, circ_y, (float) aux_point_size, true);
