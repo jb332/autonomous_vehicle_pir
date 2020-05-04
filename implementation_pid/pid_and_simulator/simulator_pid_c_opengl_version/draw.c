@@ -128,6 +128,8 @@ static void activate_antialiasing() {
 
 static void draw(int               width,
                  int               height,
+                 int               coef_point_size,
+                 int               coef_rect_size,
                  Vehicle *         vehicle_ptr,
                  Circuit *         circuit_ptr,
                  Point             scale,
@@ -148,9 +150,6 @@ static void draw(int               width,
         previous_width = width;
         previous_height = height;
     }
-
-    int coef_point_size = 4;
-    int coef_rect_size = 5;
 
     /* set the window background color to white */
     glClearColor(255.0, 255.0, 255.0, 255.0);
@@ -225,7 +224,11 @@ int draw_loop(Vehicle *         vehicle_ptr,
     /* Begin Graphical Parameters */
     int width = 1200;             /* window width in pixels */
     int height = 800;             /* window height in pixels */
+
     Point scale = {150.0, 100.0}; /* scale (max coordinates) */
+
+    int coef_point_size = 4;      /* objects size depends on the window size, but */
+    int coef_rect_size = 5;       /* you can apply multiplier coefficients here */
     /* End Graphical Parameters */
 
     /* OpenGL */
@@ -258,7 +261,7 @@ int draw_loop(Vehicle *         vehicle_ptr,
         /* clear color buffer */
         glClear(GL_COLOR_BUFFER_BIT);
 
-        draw(width, height, vehicle_ptr, circuit_ptr, scale, mutex_sensors_ptr);
+        draw(width, height, coef_point_size, coef_rect_size, vehicle_ptr, circuit_ptr, scale, mutex_sensors_ptr);
 
         glfwSwapBuffers(window);
         glfwPollEvents();
