@@ -67,7 +67,7 @@ int main(int argc, char * argv[]) {
     /* Shutdown boolean */
     bool shutdown = false;
 
-    /* Start PID loop */
+    /* Start PID loop (thread 1) */
     void * args_pid[6];
     args_pid[0] = &vehicle;
     args_pid[1] = &circuit;
@@ -78,7 +78,7 @@ int main(int argc, char * argv[]) {
     pthread_t thread_pid;
     pthread_create(&thread_pid, NULL, pid_loop, args_pid);
 
-    /* Start Simulator loop */
+    /* Start Simulator loop (thread 2) */
     void * args_simu[7];
     args_simu[0] = &vehicle;
     args_simu[1] = &mutex_sensors;
@@ -90,7 +90,7 @@ int main(int argc, char * argv[]) {
     pthread_t thread_simulator;
     pthread_create(&thread_simulator, NULL, simulator_loop, args_simu);
 
-    /* Start Draw loop */
+    /* Start Draw loop (main thread) */
     int status = draw_loop(&vehicle, &circuit, &mutex_sensors, &mutex_draw_event, &draw_event);
 
     /* Shutdown */
@@ -104,6 +104,7 @@ int main(int argc, char * argv[]) {
     pthread_mutex_destroy(&mutex_commands);
     pthread_mutex_destroy(&mutex_draw_event);
     pthread_mutex_destroy(&mutex_shutdown);
+    pthread_cond_destroy(&draw_event);
     for(int i=0; i<4; i++) {
         free(circuit.aux_points[i]);
     }

@@ -2,7 +2,6 @@
  * Created by jb on 29/04/2020.
  */
 
-#include <stdio.h> //TO REMOVE
 #include <stdlib.h>
 #include <stdbool.h>
 #include <time.h>
@@ -12,6 +11,7 @@
 #include "simulator.h"
 #include "types.h"
 #include "functions.h"
+
 
 static void simulate_move(Vehicle *         vehicle_ptr,
                           int               simu_period,
@@ -70,8 +70,10 @@ void * simulator_loop(void * args) {
     while(!finished) {
         clock_t start_time = clock();
 
-	simulate_move(vehicle_ptr, simu_period, rand_degrees, max_speed, max_steer, mutex_sensors_ptr, mutex_commands_ptr);
-        
+        /* simulation iteration */
+        simulate_move(vehicle_ptr, simu_period, rand_degrees, max_speed, max_steer, mutex_sensors_ptr, mutex_commands_ptr);
+
+
         /* trigger draw event */
         pthread_mutex_lock(mutex_draw_event_ptr);
         pthread_cond_signal(draw_event_ptr);
