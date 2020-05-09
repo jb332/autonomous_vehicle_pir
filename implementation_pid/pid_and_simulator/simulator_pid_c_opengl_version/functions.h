@@ -13,6 +13,8 @@ float compute_distance(Point point1, Point point2);
 
 float compute_angle_difference(float angle1, float angle2);
 
+void wait_remaining_period(clock_t start_time, int period_in_ms);
+
 
 /****** simulation ******/
 void convert_coordinates(Point coord, Point scale, int width, int height, int * x_pixels, int * y_pixels);

@@ -4,7 +4,6 @@
 
 #include <stdlib.h>
 #include <stdbool.h>
-#include <time.h>
 #include <pthread.h>
 #include <math.h>
 
@@ -19,7 +18,8 @@ static void simulate_move(Vehicle *         vehicle_ptr,
                           float             max_speed,
                           float             max_steer,
                           pthread_mutex_t * mutex_sensors_ptr,
-                          pthread_mutex_t * mutex_commands_ptr)
+                          pthread_mutex_t * mutex_commands_ptr,
+                          bool              steer_dependant_alea)
 {
     pthread_mutex_lock(mutex_sensors_ptr);
     Point position = vehicle_ptr->position;
@@ -33,11 +33,18 @@ static void simulate_move(Vehicle *         vehicle_ptr,
 
     float delta_t = (float)simu_period / 1000.0;
     float delta_d = speed * (float)delta_t;
-    float rand_minus_1_plus_1 = 2.0 * (float)rand() / (float)RAND_MAX - 1;
-    float rand_ratio = rand_degrees / 360.0;
+    float rand_minus_1_plus_1 = 2.0 * (float)rand() / (float)RAND_MAX - 1.0;
     float speed_ratio = speed / max_speed;
 
-    float new_angle = (angle + limit_steer(steer, max_steer) * delta_t) * (1.0 + rand_ratio * rand_minus_1_plus_1 * speed_ratio);
+    float new_angle;
+    if(steer_dependant_alea) {
+        float rand_ratio = rand_degrees / 360.0;
+        new_angle = (angle + limit_steer(steer, max_steer) * delta_t) * (1.0 + rand_ratio * rand_minus_1_plus_1 * speed_ratio);
+    } else {
+        new_angle = angle + limit_steer(steer, max_steer) * delta_t +
+                          rand_degrees * rand_minus_1_plus_1 * speed_ratio;
+    }
+
     new_angle = fmod(new_angle, 360.0);
     Point new_position = compute_new_position(position, delta_d, angle);
 
@@ -68,26 +75,15 @@ void * simulator_loop(void * args) {
     /* simulation loop */
     bool finished = false;
     while(!finished) {
-        clock_t start_time = clock();
+        clock_t period_begin_time = clock();
 
         /* simulation iteration */
-        simulate_move(vehicle_ptr, simu_period, rand_degrees, max_speed, max_steer, mutex_sensors_ptr, mutex_commands_ptr);
-
+        simulate_move(vehicle_ptr, simu_period, rand_degrees, max_speed, max_steer, mutex_sensors_ptr, mutex_commands_ptr, false);
 
         /* trigger draw event */
         pthread_mutex_lock(mutex_draw_event_ptr);
         pthread_cond_signal(draw_event_ptr);
         pthread_mutex_unlock(mutex_draw_event_ptr);
-
-        /* wait for the remaining period time */
-        clock_t stop_time = clock();
-        double elapsed_time = (double)(stop_time - start_time) / CLOCKS_PER_SEC;
-        double wait_time_ns = simu_period * 1000000.0 - elapsed_time * 1000000000.0;
-        struct timespec t = {
-            wait_time_ns / 1000000000.0,
-            fmod(wait_time_ns, 1000000000.0)
-        };
-        nanosleep(&t, NULL);
 
         /* check for shutdown order */
         pthread_mutex_lock(mutex_shutdown_ptr);
@@ -95,7 +91,13 @@ void * simulator_loop(void * args) {
             finished = true;
         }
         pthread_mutex_unlock(mutex_shutdown_ptr);
+
+        /* wait for the remaining period time */
+        if(!finished) {
+            wait_remaining_period(period_begin_time, simu_period);
+        }
     }
 
     return NULL;
 }
+

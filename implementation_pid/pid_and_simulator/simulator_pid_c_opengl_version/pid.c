@@ -3,7 +3,6 @@
  */
 
 #include <stdbool.h>
-#include <time.h>
 #include <pthread.h>
 #include <math.h>
 
@@ -39,7 +38,7 @@ void * pid_loop(void * args) {
     /* pid loop */
     bool finished = false;
     while(!finished) {
-        clock_t start_time = clock();
+        clock_t period_begin_time = clock();
 
         /* direction */
 	pthread_mutex_lock(mutex_sensors_ptr);
@@ -79,22 +78,19 @@ void * pid_loop(void * args) {
         vehicle_ptr->steer = steer;
 	pthread_mutex_unlock(mutex_commands_ptr);
 
-        /* wait for the remaining period time */
-        clock_t stop_time = clock();
-        double elapsed_time = (double)(stop_time - start_time) / CLOCKS_PER_SEC;
-        double wait_time_ns = pid_period * 1000000.0 - elapsed_time * 1000000000.0;
-        struct timespec t = {
-            wait_time_ns / 1000000000.0,
-            fmod(wait_time_ns, 1000000000.0)
-        };
-        nanosleep(&t, NULL);
-
         /* check for shutdown order */
         pthread_mutex_lock(mutex_shutdown_ptr);
         if(*shutdown_ptr) {
             finished = true;
         }
         pthread_mutex_unlock(mutex_shutdown_ptr);
+
+        /* wait for the remaining period time */
+        if(!finished) {
+            wait_remaining_period(period_begin_time, pid_period);
+        }
     }
+
     return NULL;
 }
+

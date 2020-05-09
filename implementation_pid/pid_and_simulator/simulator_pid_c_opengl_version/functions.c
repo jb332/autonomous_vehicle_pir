@@ -4,6 +4,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <time.h>
 #include <math.h>
 #ifndef M_PI
     #define M_PI 3.14159265359
@@ -31,6 +32,17 @@ float compute_angle_difference(float angle1, float angle2) {
         delta_angle += 360.0;
     }
     return delta_angle;
+}
+
+void wait_remaining_period(clock_t start_time, int period_in_ms) {
+    clock_t stop_time = clock();
+    double elapsed_time = (double)(stop_time - start_time) / CLOCKS_PER_SEC;
+    double wait_time_ns = period_in_ms * 1000000.0 - elapsed_time * 1000000000.0;
+    struct timespec t = {
+        wait_time_ns / 1000000000.0,
+        fmod(wait_time_ns, 1000000000.0)
+    };
+    nanosleep(&t, NULL);
 }
 
 /****** simulation ******/
