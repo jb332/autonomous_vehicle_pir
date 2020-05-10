@@ -56,8 +56,9 @@ You will find a README file for each version.
 
 ## Project report
 
-The project report is available on the overleaf platform here :
-[https://www.overleaf.com/8927888864mqkshqjygyjf](https://www.overleaf.com/8927888864mqkshqjygyjf)
+The project reports are available on the overleaf platform :
+[https://www.overleaf.com/project/5ea6e5b4416f0b00017643cc](Technical accomplishment )
+[https://www.overleaf.com/8927888864mqkshqjygyjf](State of the art )
 
 ## Other documents and drafts
 
