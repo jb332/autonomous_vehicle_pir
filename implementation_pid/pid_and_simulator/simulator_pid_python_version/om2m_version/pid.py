@@ -6,6 +6,70 @@ from time import sleep
 import math
 import random
 import sys
+import request_om2m
+import http.server
+from http.server import BaseHTTPRequestHandler
+import json
+
+###############
+### Monitor ###
+###############
+
+
+class S(BaseHTTPRequestHandler):
+
+    def __init__(self, request, client, server):
+        BaseHTTPRequestHandler.__init__(self, request, client, server)
+        self.vehicle = None
+        self.lock = None
+
+    def _set_response(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'text/html')
+        self.end_headers()
+
+    def do_GET(self):
+        self._set_response()
+        self.wfile.write("GET request for {}".format(self.path).encode('utf-8'))
+
+    def do_POST(self):
+        long = -1
+        lat = -1
+        # print("post")
+        content_length = int(self.headers['Content-Length'])
+        # print(self.headers)
+        post_data = self.rfile.read(content_length)  # <--- Gets the data itself
+        # print(post_data)
+        if self.headers['Content-Type'].find('application/json') != -1:
+            data_jason = json.loads(post_data.decode('utf-8'))
+            # print(post_data.decode('utf-8'))
+            # print(data_jason)
+            if content_length > 100:
+                cin = data_jason['m2m:sgn']['m2m:nev']['m2m:rep']['m2m:cin']
+                label = cin.get('lbl', -1)
+                con = cin.get('con', -1)
+                # print(con)
+                if "pid" in label:
+                    # print("iflabel")
+                    con_jason = json.loads(con)
+                    speed = con_jason['speed']
+                    steer = con_jason['steer']
+                    with self.lock:
+                        self.vehicle.speed = speed
+                        self.vehicle.steer = steer
+        self._set_response()
+        self.wfile.write("POST request for {}".format(self.path).encode('utf-8'))
+
+
+def main_monitor(port, vehicle, lock):
+    server_address = ("", port)
+    server = http.server.HTTPServer
+    handler = S
+    print("Serveur actif sur le port :", port)
+    httpd = server(server_address, handler)
+    handler.vehicle = vehicle
+    handler.lock = lock
+    httpd.serve_forever()
 
 
 ##############
@@ -147,7 +211,7 @@ def compute_direction_error(measured_direction, aimed_direction):
 
 
 # pid process
-def main_pid_loop(vehicle, circuit, sensors_lock, commands_lock):
+def main_pid_loop(vehicle, circuit, sensors_lock, commands_lock, nameAE):
     # Parameters Begin
     pid_period = 0.05
     max_speed = 5
@@ -221,6 +285,14 @@ def main_pid_loop(vehicle, circuit, sensors_lock, commands_lock):
         """
 
         #envoi requête HTTP ici
+        data = '"{ \
+                           \\"appID\\": \\"app_'+ nameAE +'\\", \
+                           \\"category\\": \\"app_value\\", \
+                           \\"speed\\": ' + str(speed) + ', \
+                           \\"steer\\": ' + str(steer) + ' \
+                           }" '
+        url = "http://localhost:8080/~/in-cse/in-name/"+nameAE+"/DATA"
+        request_om2m.createContentInstance("admin:admin", url, data, "pid")
 
 ############
 ### Main ###
@@ -262,7 +334,15 @@ def main():
     sensors_lock = RLock()
     commands_lock = RLock()
 
-    main_pid_loop(vehicle, circuit, sensors_lock, commands_lock)
+    # om2m
+    port = 1800
+    nameAE = "NavSensorPID"
+    Thread(target=main_monitor, args=(port, vehicle, commands_lock), daemon=True).start()
+    request_om2m.init_om2m(nameAE, port)
+
+
+
+    main_pid_loop(vehicle, circuit, sensors_lock, commands_lock, nameAE)
 
 
 if __name__ == "__main__":
