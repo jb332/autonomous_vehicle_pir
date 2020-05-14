@@ -15,14 +15,12 @@ import json
 ### Monitor ###
 ###############
 
-
 class S(BaseHTTPRequestHandler):
 
-    def __init__(self, request,  client, server):
+    def __init__(self, request, client, server):
         BaseHTTPRequestHandler.__init__(self, request, client, server)
         self.vehicle = None
         self.lock = None
-
 
     def _set_response(self):
         self.send_response(200)
@@ -41,24 +39,25 @@ class S(BaseHTTPRequestHandler):
         # print(post_data)
         if self.headers['Content-Type'].find('application/json') != -1:
             data_jason = json.loads(post_data.decode('utf-8'))
-            #print(post_data.decode('utf-8'))
+            # print(post_data.decode('utf-8'))
             # print(data_jason)
             if content_length > 100:
                 cin = data_jason['m2m:sgn']['m2m:nev']['m2m:rep']['m2m:cin']
                 label = cin.get('lbl', -1)
                 con = cin.get('con', -1)
                 # print(con)
-                if "coordonate" in label:
+                if "pid" in label:
+                    # print("iflabel")
                     con_jason = json.loads(con)
-                    x = con_jason['x']
-                    y = con_jason['y']
-                    angle = con_jason['angle']
+                    speed = con_jason['speed']
+                    steer = con_jason['steer']
                     with self.lock:
-                        i = 42
-                       # self.vehicle.position = Point(x, y)
-                       # self.vehicle.angle = angle
+                        self.vehicle.speed = speed
+                        self.vehicle.steer = steer
         self._set_response()
         self.wfile.write("POST request for {}".format(self.path).encode('utf-8'))
+
+
 
 
 def main_monitor(port, vehicle, lock):
@@ -70,7 +69,6 @@ def main_monitor(port, vehicle, lock):
     handler.lock = lock
     print("Serveur actif sur le port :", port)
     httpd = server(server_address, handler)
-
     httpd.serve_forever()
 
 ##############
@@ -320,9 +318,6 @@ def iterate(args_tuple):
         vehicle.angle = new_angle
     
     """
-    with sensors_lock:
-        vehicle.position = new_position
-        vehicle.angle = new_angle
 
     #envoi requête HTTP ici
     data = '"{ \
@@ -415,7 +410,7 @@ def main():
     commands_lock = RLock()
 
     #om2m
-    port = 1400
+    port = 1800
     nameAE = "NavSensorGPS"
     Thread(target=main_monitor, args=(port, vehicle, sensors_lock), daemon=True).start()
     request_om2m.init_om2m(nameAE, port)

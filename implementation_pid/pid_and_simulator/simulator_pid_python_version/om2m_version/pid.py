@@ -18,10 +18,11 @@ import json
 
 class S(BaseHTTPRequestHandler):
 
-    def __init__(self, request, client, server):
+    def __init__(self, request,  client, server):
         BaseHTTPRequestHandler.__init__(self, request, client, server)
         self.vehicle = None
         self.lock = None
+
 
     def _set_response(self):
         self.send_response(200)
@@ -33,8 +34,6 @@ class S(BaseHTTPRequestHandler):
         self.wfile.write("GET request for {}".format(self.path).encode('utf-8'))
 
     def do_POST(self):
-        long = -1
-        lat = -1
         # print("post")
         content_length = int(self.headers['Content-Length'])
         # print(self.headers)
@@ -42,21 +41,21 @@ class S(BaseHTTPRequestHandler):
         # print(post_data)
         if self.headers['Content-Type'].find('application/json') != -1:
             data_jason = json.loads(post_data.decode('utf-8'))
-            # print(post_data.decode('utf-8'))
+            #print(post_data.decode('utf-8'))
             # print(data_jason)
             if content_length > 100:
                 cin = data_jason['m2m:sgn']['m2m:nev']['m2m:rep']['m2m:cin']
                 label = cin.get('lbl', -1)
                 con = cin.get('con', -1)
                 # print(con)
-                if "pid" in label:
-                    # print("iflabel")
+                if "coordonate" in label:
                     con_jason = json.loads(con)
-                    speed = con_jason['speed']
-                    steer = con_jason['steer']
+                    x = con_jason['x']
+                    y = con_jason['y']
+                    angle = con_jason['angle']
                     with self.lock:
-                        self.vehicle.speed = speed
-                        self.vehicle.steer = steer
+                       self.vehicle.position = Point(x, y)
+                       self.vehicle.angle = angle
         self._set_response()
         self.wfile.write("POST request for {}".format(self.path).encode('utf-8'))
 
@@ -335,7 +334,7 @@ def main():
     commands_lock = RLock()
 
     # om2m
-    port = 1800
+    port = 1400
     nameAE = "NavSensorPID"
     Thread(target=main_monitor, args=(port, vehicle, commands_lock), daemon=True).start()
     request_om2m.init_om2m(nameAE, port)
