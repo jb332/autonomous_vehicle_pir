@@ -51,6 +51,7 @@ class S(BaseHTTPRequestHandler):
                     con_jason = json.loads(con)
                     speed = con_jason['speed']
                     steer = con_jason['steer']
+                    # print(speed)
                     with self.lock:
                         self.vehicle.speed = speed
                         self.vehicle.steer = steer
@@ -319,6 +320,10 @@ def iterate(args_tuple):
     
     """
 
+    with sensors_lock:
+        vehicle.position = new_position
+        vehicle.angle = new_angle
+
     #envoi requête HTTP ici
     data = '"{ \
                    \\"appID\\": \\"app_'+nameAE+'\\", \
@@ -413,7 +418,7 @@ def main():
     port = 1800
     nameAE = "NavSensorGPS"
     Thread(target=main_monitor, args=(port, vehicle, sensors_lock), daemon=True).start()
-    request_om2m.init_om2m(nameAE, port)
+    #request_om2m.init_om2m(nameAE, nameAEPID, port)
 
     main_simulator(vehicle, circuit, sensors_lock, commands_lock, nameAE)
 

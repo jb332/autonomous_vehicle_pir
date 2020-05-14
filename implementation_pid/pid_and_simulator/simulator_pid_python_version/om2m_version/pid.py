@@ -283,6 +283,10 @@ def main_pid_loop(vehicle, circuit, sensors_lock, commands_lock, nameAE):
             vehicle.steer = steer
         """
 
+        with commands_lock:
+            vehicle.speed = speed
+            vehicle.steer = steer
+
         #envoi requête HTTP ici
         data = '"{ \
                            \\"appID\\": \\"app_'+ nameAE +'\\", \
@@ -335,9 +339,9 @@ def main():
 
     # om2m
     port = 1400
-    nameAE = "NavSensorPID"
+    nameAE = "NavSensorGPS"
     Thread(target=main_monitor, args=(port, vehicle, commands_lock), daemon=True).start()
-    request_om2m.init_om2m(nameAE, port)
+    # request_om2m.init_om2m(nameAE, nameAESimu, port)
 
 
 
