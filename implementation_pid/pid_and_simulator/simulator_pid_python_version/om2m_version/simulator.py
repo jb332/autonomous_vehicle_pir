@@ -29,7 +29,7 @@ class S(BaseHTTPRequestHandler):
 
     def do_GET(self):
         self._set_response()
-        self.wfile.write("GET request for {}".format(self.path).encode('utf-8'))
+        # self.wfile.write("GET request for {}".format(self.path).encode('utf-8'))
 
     def do_POST(self):
         # print("post")
@@ -46,19 +46,17 @@ class S(BaseHTTPRequestHandler):
                 label = cin.get('lbl', -1)
                 con = cin.get('con', -1)
                 # print(con)
-                if "pid" in label:
+                if "commands" in label:
                     # print("iflabel")
                     con_jason = json.loads(con)
                     speed = con_jason['speed']
                     steer = con_jason['steer']
-                    # print(speed)
                     with self.lock:
                         self.vehicle.speed = speed
                         self.vehicle.steer = steer
+                    # print("\nspeed = " + str(speed) + "\nsteer = " + str(steer) + "\n")
         self._set_response()
-        self.wfile.write("POST request for {}".format(self.path).encode('utf-8'))
-
-
+        # self.wfile.write("POST request for {}".format(self.path).encode('utf-8'))
 
 
 def main_monitor(port, vehicle, lock):
@@ -71,6 +69,7 @@ def main_monitor(port, vehicle, lock):
     print("Serveur actif sur le port :", port)
     httpd = server(server_address, handler)
     httpd.serve_forever()
+
 
 ##############
 ### Common ###
@@ -136,7 +135,7 @@ class Circuit:
                 )
 
         if not clockwise:
-            #self.stop_points.reverse()
+            self.stop_points.reverse()  # useless, but cleaner
             self.aux_points.reverse()
 
 
@@ -282,7 +281,7 @@ def compute_new_position(former_position, distance, angle):
 
 # iteration
 def iterate(args_tuple):
-    vehicle, delta_t, rand_degrees, max_speed, max_steer, sensors_lock, commands_lock, nameAE, i = args_tuple
+    vehicle, delta_t, rand_degrees, max_speed, max_steer, sensors_lock, commands_lock, i = args_tuple
 
     with sensors_lock:
         position = vehicle.position
@@ -306,50 +305,37 @@ def iterate(args_tuple):
         "\nSIMULATION\t\tangle difference = " + str(round(compute_angle_difference(new_angle, angle), 2)) + "" + "\n\n")
     """
 
-    """
-    README !!!
-    il faut envoyer une requête http sur un cse avec la position et l'angle du véhicule au lieu de simplement écrire dans l'objet véhicule
-    ensuite, un callback qu'il faudra ajouter et lier au serveur qui sourscrit à OM2M, se chargera de mettre à jour l'objet véhicule (réutiliser le code ci-dessous du coup),
-    tant pour les capteurs lorsque ce programme enverra des requêtes, que pour les commandes envoyées par le pid
-    on peut aussi envisager d'ignorer les requetes reçues qui concernent les capteurs et de directement mettre à jour l'objet bien-sûr, mais ça complique inutilement
-    le programme je trouve
-
-    with sensors_lock:
-        vehicle.position = new_position
-        vehicle.angle = new_angle
-    
-    """
-
     with sensors_lock:
         vehicle.position = new_position
         vehicle.angle = new_angle
 
     #envoi requête HTTP ici
+    nameAE = "NavSensors"
     data = '"{ \
                    \\"appID\\": \\"app_'+nameAE+'\\", \
                    \\"category\\": \\"app_value\\", \
                    \\"x\\": ' + str(new_position.x) + ', \
                    \\"y\\": ' + str(new_position.y) + ', \
-                    \\"angle\\": ' + str(new_angle) + ' \
+                   \\"angle\\": ' + str(new_angle) + ' \
                    }" '
     url = "http://localhost:8080/~/in-cse/in-name/"+nameAE+"/DATA"
-    request_om2m.createContentInstance("admin:admin", url, data, "coordonate")
+    request_om2m.createContentInstance("admin:admin", url, data, "sensors")
 
     vehicle.update_draw() #appelle la fonction de dessin pour redessiner le véhicule lorsque sa position et/ou son angle ont changé
 
 
 # loop that periodically adds the iterate() function to gtk queued tasks
-def simu_loop(vehicle, simu_period, rand_degrees, max_speed, max_steer, sensors_lock, commands_lock, nameAE):
+def simu_loop(vehicle, simu_period, rand_degrees, max_speed, max_steer, sensors_lock, commands_lock):
     random.seed(42)
     i = 1
     while True:
         sleep(simu_period)
-        GLib.idle_add(iterate, (vehicle, simu_period, rand_degrees, max_speed, max_steer, sensors_lock, commands_lock, nameAE, i))
+        GLib.idle_add(iterate, (vehicle, simu_period, rand_degrees, max_speed, max_steer, sensors_lock, commands_lock, i))
         i += 1
 
 
 # simulation process
-def main_simulator(vehicle, circuit, sensors_lock, commands_lock, nameAE):
+def main_simulator(vehicle, circuit, sensors_lock, commands_lock):
     print("main_simu")
     # Parameters Begin
     window_size = (1200, 800)  # size of the window in pixels
@@ -369,7 +355,7 @@ def main_simulator(vehicle, circuit, sensors_lock, commands_lock, nameAE):
     SimuWindow(window_size, vehicle, scale, circuit, coefs, sensors_lock)
 
     # create a thread for the simu_loop() function
-    Thread(target=simu_loop, args=(vehicle, simu_period, rand_degrees, max_speed, max_steer, sensors_lock, commands_lock, nameAE), daemon=True).start()
+    Thread(target=simu_loop, args=(vehicle, simu_period, rand_degrees, max_speed, max_steer, sensors_lock, commands_lock), daemon=True).start()
     # launches the graphical simulator application
     Gtk.main()
 
@@ -416,11 +402,10 @@ def main():
 
     #om2m
     port = 1800
-    nameAE = "NavSensorGPS"
     Thread(target=main_monitor, args=(port, vehicle, sensors_lock), daemon=True).start()
-    #request_om2m.init_om2m(nameAE, nameAEPID, port)
+    request_om2m.init_om2m("NavCommands", port)
 
-    main_simulator(vehicle, circuit, sensors_lock, commands_lock, nameAE)
+    main_simulator(vehicle, circuit, sensors_lock, commands_lock)
 
 
 if __name__ == "__main__":

@@ -1,28 +1,26 @@
 from gi import require_version
 require_version('Gtk', '3.0')
-from gi.repository import Gtk, GLib
 from threading import Thread, RLock
 from time import sleep
 import math
-import random
 import sys
 import request_om2m
 import http.server
 from http.server import BaseHTTPRequestHandler
 import json
 
+
 ###############
 ### Monitor ###
 ###############
 
-
 class S(BaseHTTPRequestHandler):
 
-    def __init__(self, request,  client, server):
+    def __init__(self, request, client, server):
         BaseHTTPRequestHandler.__init__(self, request, client, server)
         self.vehicle = None
-        self.lock = None
-
+        self.sensors_lock = None
+        self.on_off_lock = None
 
     def _set_response(self):
         self.send_response(200)
@@ -31,7 +29,7 @@ class S(BaseHTTPRequestHandler):
 
     def do_GET(self):
         self._set_response()
-        self.wfile.write("GET request for {}".format(self.path).encode('utf-8'))
+        # self.wfile.write("GET request for {}".format(self.path).encode('utf-8'))
 
     def do_POST(self):
         # print("post")
@@ -41,33 +39,42 @@ class S(BaseHTTPRequestHandler):
         # print(post_data)
         if self.headers['Content-Type'].find('application/json') != -1:
             data_jason = json.loads(post_data.decode('utf-8'))
-            #print(post_data.decode('utf-8'))
+            # print(post_data.decode('utf-8'))
             # print(data_jason)
             if content_length > 100:
                 cin = data_jason['m2m:sgn']['m2m:nev']['m2m:rep']['m2m:cin']
                 label = cin.get('lbl', -1)
                 con = cin.get('con', -1)
                 # print(con)
-                if "coordonate" in label:
+                if "sensors" in label:
                     con_jason = json.loads(con)
                     x = con_jason['x']
                     y = con_jason['y']
                     angle = con_jason['angle']
-                    with self.lock:
-                       self.vehicle.position = Point(x, y)
-                       self.vehicle.angle = angle
+                    with self.sensors_lock:
+                        self.vehicle.position = Point(x, y)
+                        self.vehicle.angle = angle
+                    # print("\nx = " + str(x) + "\ny = " + str(y) + "\nangle = " + str(angle) + "\n")
+                elif "start_stop" in label:
+                    con_jason = json.loads(con)
+                    on = con_jason['on']
+                    print("\n\n\n\n\n" + on + "\n\n\n\n\n")
+                    with self.on_off_lock:
+                        self.vehicle.on = on == "True"
+
         self._set_response()
-        self.wfile.write("POST request for {}".format(self.path).encode('utf-8'))
+        # self.wfile.write("POST request for {}".format(self.path).encode('utf-8'))
 
 
-def main_monitor(port, vehicle, lock):
+def main_monitor(port, vehicle, sensors_lock, on_off_lock):
     server_address = ("", port)
     server = http.server.HTTPServer
     handler = S
     print("Serveur actif sur le port :", port)
     httpd = server(server_address, handler)
     handler.vehicle = vehicle
-    handler.lock = lock
+    handler.sensors_lock = sensors_lock
+    handler.on_off_lock = on_off_lock
     httpd.serve_forever()
 
 
@@ -134,7 +141,7 @@ class Circuit:
                 )
 
         if not clockwise:
-            #self.stop_points.reverse()
+            self.stop_points.reverse()  # useless, but cleaner
             self.aux_points.reverse()
 
 
@@ -144,6 +151,7 @@ class Vehicle:
         self.angle = angle
         self.speed = 0
         self.steer = 0
+        self.on = True
         self.update_draw = None
 
 
@@ -210,7 +218,7 @@ def compute_direction_error(measured_direction, aimed_direction):
 
 
 # pid process
-def main_pid_loop(vehicle, circuit, sensors_lock, commands_lock, nameAE):
+def main_pid_loop(vehicle, circuit, sensors_lock, commands_lock, on_off_lock):
     # Parameters Begin
     pid_period = 0.05
     max_speed = 5
@@ -245,7 +253,26 @@ def main_pid_loop(vehicle, circuit, sensors_lock, commands_lock, nameAE):
             k.i * total_error_direction + \
             k.d * (error_direction - previous_error_direction)
 
-        speed = get_aimed_speed(position, destination, stop_distance, max_speed)
+        # speed = get_aimed_speed(position, destination, stop_distance, max_speed)
+
+        with commands_lock:
+            previous_speed = vehicle.speed
+
+        with on_off_lock:
+            on = vehicle.on
+
+        if on:
+            if previous_speed == 0:
+                speed = max_speed / 10
+            elif previous_speed < max_speed:
+                speed = min(previous_speed * 2, max_speed)
+            else:
+                speed = max_speed
+        else:
+            if previous_speed > max_speed / 10:
+                speed = previous_speed / 1.5
+            else:
+                speed = 0
 
         # destination change
         distance_to_target = position.distance_to(destination)
@@ -270,24 +297,12 @@ def main_pid_loop(vehicle, circuit, sensors_lock, commands_lock, nameAE):
 
         previous_error_direction = error_direction
 
-        """
-        README !!!!!
-        il faut envoyer une requête http sur un cse avec la vitesse et l'angle de braquage calculés au lieu de simplement écrire dans l'objet véhicule
-        ensuite, un callback qu'il faudra ajouter et lier au serveur qui sourscrit à OM2M, se chargera de mettre à jour l'objet véhicule (réutiliser le code ci-dessous du coup),
-        tant pour les capteurs lorsque le simulateur enverra des requêtes, que pour les commandes envoyées par ce programme
-        on peut aussi envisager d'ignorer les requetes reçues qui concernent les commandes et de directement mettre à jour l'objet bien-sûr, mais ça complique inutilement
-        le programme je trouve
-        
-        with commands_lock:
-            vehicle.speed = speed
-            vehicle.steer = steer
-        """
-
         with commands_lock:
             vehicle.speed = speed
             vehicle.steer = steer
 
         #envoi requête HTTP ici
+        nameAE = "NavCommands"
         data = '"{ \
                            \\"appID\\": \\"app_'+ nameAE +'\\", \
                            \\"category\\": \\"app_value\\", \
@@ -295,7 +310,7 @@ def main_pid_loop(vehicle, circuit, sensors_lock, commands_lock, nameAE):
                            \\"steer\\": ' + str(steer) + ' \
                            }" '
         url = "http://localhost:8080/~/in-cse/in-name/"+nameAE+"/DATA"
-        request_om2m.createContentInstance("admin:admin", url, data, "pid")
+        request_om2m.createContentInstance("admin:admin", url, data, "commands")
 
 ############
 ### Main ###
@@ -336,16 +351,15 @@ def main():
     # mutex
     sensors_lock = RLock()
     commands_lock = RLock()
+    on_off_lock = RLock()
 
     # om2m
     port = 1400
-    nameAE = "NavSensorGPS"
-    Thread(target=main_monitor, args=(port, vehicle, commands_lock), daemon=True).start()
-    # request_om2m.init_om2m(nameAE, nameAESimu, port)
+    Thread(target=main_monitor, args=(port, vehicle, sensors_lock, on_off_lock), daemon=True).start()
+    request_om2m.init_om2m("NavSensors", port)
+    request_om2m.init_om2m("NavStartStop", port)
 
-
-
-    main_pid_loop(vehicle, circuit, sensors_lock, commands_lock, nameAE)
+    main_pid_loop(vehicle, circuit, sensors_lock, commands_lock, on_off_lock)
 
 
 if __name__ == "__main__":
