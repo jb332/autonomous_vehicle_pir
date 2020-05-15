@@ -1,0 +1,19 @@
+#OM2M
+Pour la simulation, nous avons deux serveurs d'écoute sur le localhost sur les port 1400 (pid) et 1800 (simulator).
+Les informations sont postées à l'adresse du IN avec l'architecture suivante:
+NavCommands
+    Data
+NavSensors
+    Data
+NavStartStop
+    Data
+L'architecture om2m est créé par la fonction init_om2m appelé par les processus pid et simulator.
+
+Pour lire les données, faut simplement faire une requête getContentInstance sur :
+@IN/NavCommands/Data --> speed + steer, info stockées au format json
+@IN/NavSensors/Data --> x+y+angle, info stockées au format json
+@IN/NavStartStop/Data --> on+off, info stockées au format json
+
+En simulation, le in est à l'adresse suivante : @IN = http://localhost:8080/~/in-cse/in-name/
+Pour stopper/demarrer le vehicule en simulation, faut créer un contentInstance avec on ou off à l'adresse suivante :
+    http://localhost:8080/~/in-cse/in-name/NavStartStop/Data
