@@ -309,7 +309,7 @@ def main_pid_loop(vehicle, circuit, sensors_lock, commands_lock, on_off_lock):
                            \\"speed\\": ' + str(speed) + ', \
                            \\"steer\\": ' + str(steer) + ' \
                            }" '
-        url = "http://localhost:8080/~/in-cse/in-name/"+nameAE+"/DATA"
+        url = "http://localhost:9090/~/in-cse/in-name/"+nameAE+"/DATA"
         request_om2m.createContentInstance("admin:admin", url, data, "commands")
 
 ############

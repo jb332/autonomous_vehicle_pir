@@ -10,6 +10,7 @@ import request_om2m
 import http.server
 from http.server import BaseHTTPRequestHandler
 import json
+import xmltodict
 
 ###############
 ### Monitor ###
@@ -58,6 +59,65 @@ class S(BaseHTTPRequestHandler):
         self._set_response()
         # self.wfile.write("POST request for {}".format(self.path).encode('utf-8'))
 
+class S2(BaseHTTPRequestHandler):
+
+    def __init__(self, request, client, server):
+        BaseHTTPRequestHandler.__init__(self, request, client, server)
+        self.vehicle = None
+        self.lock1 = None
+        self.lock2 = None
+
+    def _set_response(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'text/html')
+        self.end_headers()
+
+    def do_GET(self):
+        self._set_response()
+        # self.wfile.write("GET request for {}".format(self.path).encode('utf-8'))
+
+    def do_POST(self):
+        # print("post")
+        content_length = int(self.headers['Content-Length'])
+        print(self.headers)
+        post_data = self.rfile.read(content_length)  # <--- Gets the data itself
+        print(post_data.decode('utf-8'))
+        if self.headers['Content-Type'].find('application/json') != -1:
+            data_jason = json.loads(post_data.decode('utf-8'))
+            # data_xml = xmltodict.parse(post_data.decode('utf-8'))
+            print(post_data.decode('utf-8'))
+            # print(data_jason)
+            if content_length > 100:
+                cin = data_jason['m2m:sgn']['m2m:nev']['m2m:rep']['m2m:cin']
+                label = cin.get('lbl', -1)
+                cnf = cin.get('cnf', -1)
+                # print(con)
+                if "pilot" in label:
+                    # print("iflabel")
+                    if "SPEED+" in cnf:
+                        with self.lock2:
+                            self.vehicle.speed += 1
+                            print(self.vehicle.speed)
+                    elif "SPEED-" in cnf:
+                        with self.lock2:
+                            self.vehicle.speed -= 1
+                            print(self.vehicle.speed)
+                    elif "LEFT" in cnf:
+                        with self.lock2:
+                            self.vehicle.steer -= 1
+                    elif "RIGHT" in cnf:
+                        with self.lock2:
+                            self.vehicle.steer += 1
+                    elif "ANGULAR+" in cnf:
+                        with self.lock1:
+                            self.vehicle.angle += 1
+                    elif "ANGULAR-" in cnf:
+                        with self.lock1:
+                            self.vehicle.angle -= 1
+                    # print("\nspeed = " + str(speed) + "\nsteer = " + str(steer) + "\n")
+        self._set_response()
+        # self.wfile.write("POST request for {}".format(self.path).encode('utf-8'))
+
 
 def main_monitor(port, vehicle, lock):
     print("run_monitor")
@@ -66,6 +126,18 @@ def main_monitor(port, vehicle, lock):
     handler = S
     handler.vehicle = vehicle
     handler.lock = lock
+    print("Serveur actif sur le port :", port)
+    httpd = server(server_address, handler)
+    httpd.serve_forever()
+
+def main_monitor2(port, vehicle, lock1, lock2):
+    print("run_monitor2")
+    server_address = ("", port)
+    server = http.server.HTTPServer
+    handler = S2
+    handler.vehicle = vehicle
+    handler.lock1 = lock1
+    handler.lock2 = lock2
     print("Serveur actif sur le port :", port)
     httpd = server(server_address, handler)
     httpd.serve_forever()
@@ -318,7 +390,7 @@ def iterate(args_tuple):
                    \\"y\\": ' + str(new_position.y) + ', \
                    \\"angle\\": ' + str(new_angle) + ' \
                    }" '
-    url = "http://localhost:8080/~/in-cse/in-name/"+nameAE+"/DATA"
+    url = "http://localhost:9090/~/in-cse/in-name/"+nameAE+"/DATA"
     request_om2m.createContentInstance("admin:admin", url, data, "sensors")
 
     vehicle.update_draw() #appelle la fonction de dessin pour redessiner le véhicule lorsque sa position et/ou son angle ont changé
@@ -402,7 +474,9 @@ def main():
 
     #om2m
     port = 1800
+    Thread(target=main_monitor2, args=(2200, vehicle, sensors_lock, commands_lock), daemon=True).start()
     Thread(target=main_monitor, args=(port, vehicle, sensors_lock), daemon=True).start()
+    request_om2m.init_om2m("NavLink", 2200)
     request_om2m.init_om2m("NavCommands", port)
 
     main_simulator(vehicle, circuit, sensors_lock, commands_lock)
