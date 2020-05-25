@@ -137,7 +137,7 @@ def subToAE(origin, listenURL, name, url):
 
 def creationAE_DATA(nameAE):
 	# print("test\n")
-	url = "http://localhost:8080/~/in-cse/in-name"
+	url = "http://localhost:9090/~/in-cse/in-name"
 	createAE(url, "app_"+nameAE, nameAE, "[Type/sensor]")
 	createContainer("admin:admin", url+"/"+nameAE, "DATA", "data")
 
@@ -153,9 +153,12 @@ def deleteAE(origin, url):
 
 
 def init_om2m(nameAE, port):
-	url = "http://localhost:8080/~/in-cse/in-name"
+	url = "http://localhost:9090/~/in-cse/in-name"
 	deleteAE("admin:admin", url+"/"+nameAE)
 	creationAE_DATA(nameAE)
 	# deleteSUB("admin:admin", url+"/"+nameAE+"/DATA/Sub"+nameAE)
 	listen_url = "http://localhost:"+str(port)
 	subToAE("admin:admin", listen_url, "Sub" + nameAE, url+"/"+nameAE+"/DATA")
+
+nameAE = "SDT_IPE"
+deleteAE("admin:admin", "http://localhost:9090/~/in-cse/in-name/"+nameAE)

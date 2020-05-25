@@ -6,147 +6,11 @@ from time import sleep
 import math
 import random
 import sys
-import request_om2m
-import http.server
-from http.server import BaseHTTPRequestHandler
-import json
-import xmltodict
-
-###############
-### Monitor ###
-###############
-
-class S(BaseHTTPRequestHandler):
-
-    def __init__(self, request, client, server):
-        BaseHTTPRequestHandler.__init__(self, request, client, server)
-        self.vehicle = None
-        self.lock = None
-
-    def _set_response(self):
-        self.send_response(200)
-        self.send_header('Content-type', 'text/html')
-        self.end_headers()
-
-    def do_GET(self):
-        self._set_response()
-        # self.wfile.write("GET request for {}".format(self.path).encode('utf-8'))
-
-    def do_POST(self):
-        # print("post")
-        content_length = int(self.headers['Content-Length'])
-        # print(self.headers)
-        post_data = self.rfile.read(content_length)  # <--- Gets the data itself
-        # print(post_data)
-        if self.headers['Content-Type'].find('application/json') != -1:
-            data_jason = json.loads(post_data.decode('utf-8'))
-            # print(post_data.decode('utf-8'))
-            # print(data_jason)
-            if content_length > 100:
-                cin = data_jason['m2m:sgn']['m2m:nev']['m2m:rep']['m2m:cin']
-                label = cin.get('lbl', -1)
-                con = cin.get('con', -1)
-                # print(con)
-                if "commands" in label:
-                    # print("iflabel")
-                    con_jason = json.loads(con)
-                    speed = con_jason['speed']
-                    steer = con_jason['steer']
-                    with self.lock:
-                        self.vehicle.speed = speed
-                        self.vehicle.steer = steer
-                    # print("\nspeed = " + str(speed) + "\nsteer = " + str(steer) + "\n")
-        self._set_response()
-        # self.wfile.write("POST request for {}".format(self.path).encode('utf-8'))
-
-class S2(BaseHTTPRequestHandler):
-
-    def __init__(self, request, client, server):
-        BaseHTTPRequestHandler.__init__(self, request, client, server)
-        self.vehicle = None
-        self.lock1 = None
-        self.lock2 = None
-
-    def _set_response(self):
-        self.send_response(200)
-        self.send_header('Content-type', 'text/html')
-        self.end_headers()
-
-    def do_GET(self):
-        self._set_response()
-        # self.wfile.write("GET request for {}".format(self.path).encode('utf-8'))
-
-    def do_POST(self):
-        # print("post")
-        content_length = int(self.headers['Content-Length'])
-        print(self.headers)
-        post_data = self.rfile.read(content_length)  # <--- Gets the data itself
-        print(post_data.decode('utf-8'))
-        if self.headers['Content-Type'].find('application/json') != -1:
-            data_jason = json.loads(post_data.decode('utf-8'))
-            # data_xml = xmltodict.parse(post_data.decode('utf-8'))
-            print(post_data.decode('utf-8'))
-            # print(data_jason)
-            if content_length > 100:
-                cin = data_jason['m2m:sgn']['m2m:nev']['m2m:rep']['m2m:cin']
-                label = cin.get('lbl', -1)
-                cnf = cin.get('cnf', -1)
-                # print(con)
-                if "pilot" in label:
-                    # print("iflabel")
-                    if "SPEED+" in cnf:
-                        with self.lock2:
-                            self.vehicle.speed += 1
-                            print(self.vehicle.speed)
-                    elif "SPEED-" in cnf:
-                        with self.lock2:
-                            self.vehicle.speed -= 1
-                            print(self.vehicle.speed)
-                    elif "LEFT" in cnf:
-                        with self.lock2:
-                            self.vehicle.steer -= 1
-                    elif "RIGHT" in cnf:
-                        with self.lock2:
-                            self.vehicle.steer += 1
-                    elif "ANGULAR+" in cnf:
-                        with self.lock1:
-                            self.vehicle.angle += 1
-                    elif "ANGULAR-" in cnf:
-                        with self.lock1:
-                            self.vehicle.angle -= 1
-                    # print("\nspeed = " + str(speed) + "\nsteer = " + str(steer) + "\n")
-        self._set_response()
-        # self.wfile.write("POST request for {}".format(self.path).encode('utf-8'))
-
-
-def main_monitor(port, vehicle, lock):
-    print("run_monitor")
-    server_address = ("", port)
-    server = http.server.HTTPServer
-    handler = S
-    handler.vehicle = vehicle
-    handler.lock = lock
-    print("Serveur actif sur le port :", port)
-    httpd = server(server_address, handler)
-    httpd.serve_forever()
-
-def main_monitor2(port, vehicle, lock1, lock2):
-    print("run_monitor2")
-    server_address = ("", port)
-    server = http.server.HTTPServer
-    handler = S2
-    handler.vehicle = vehicle
-    handler.lock1 = lock1
-    handler.lock2 = lock2
-    print("Serveur actif sur le port :", port)
-    httpd = server(server_address, handler)
-    httpd.serve_forever()
 
 
 ##############
 ### Common ###
 ##############
-
 
 class Point:
     def __init__(self, x, y):
@@ -207,7 +71,7 @@ class Circuit:
                 )
 
         if not clockwise:
-            self.stop_points.reverse()  # useless, but cleaner
+            #self.stop_points.reverse()
             self.aux_points.reverse()
 
 
@@ -353,7 +217,7 @@ def compute_new_position(former_position, distance, angle):
 
 # iteration
 def iterate(args_tuple):
-    vehicle, delta_t, rand_degrees, max_speed, max_steer, sensors_lock, commands_lock, i = args_tuple
+    vehicle, delta_t, rand_degrees, max_speed, max_steer, sensors_lock, commands_lock, steer_dependant_alea, i = args_tuple
 
     with sensors_lock:
         position = vehicle.position
@@ -365,11 +229,16 @@ def iterate(args_tuple):
 
     delta_d = speed * delta_t
     rand_minus_1_plus_1 = 2 * random.random() - 1
-    rand_ratio = rand_degrees / 360
     speed_ratio = speed / max_speed
 
-    new_angle = (angle + limit_steer(steer, max_steer) * delta_t) * (
+    if steer_dependant_alea:
+        rand_ratio = rand_degrees / 360
+        new_angle = (angle + limit_steer(steer, max_steer) * delta_t) * (
             1 + rand_ratio * rand_minus_1_plus_1 * speed_ratio) % 360
+    else:
+        new_angle = angle + limit_steer(steer, max_steer) * delta_t +\
+            rand_degrees * rand_minus_1_plus_1 * speed_ratio
+
     new_position = compute_new_position(position, delta_d, angle)
 
     """
@@ -381,34 +250,21 @@ def iterate(args_tuple):
         vehicle.position = new_position
         vehicle.angle = new_angle
 
-    #envoi requête HTTP ici
-    nameAE = "NavSensors"
-    data = '"{ \
-                   \\"appID\\": \\"app_'+nameAE+'\\", \
-                   \\"category\\": \\"app_value\\", \
-                   \\"x\\": ' + str(new_position.x) + ', \
-                   \\"y\\": ' + str(new_position.y) + ', \
-                   \\"angle\\": ' + str(new_angle) + ' \
-                   }" '
-    url = "http://localhost:9090/~/in-cse/in-name/"+nameAE+"/DATA"
-    request_om2m.createContentInstance("admin:admin", url, data, "sensors")
-
-    vehicle.update_draw() #appelle la fonction de dessin pour redessiner le véhicule lorsque sa position et/ou son angle ont changé
+    vehicle.update_draw()
 
 
 # loop that periodically adds the iterate() function to gtk queued tasks
-def simu_loop(vehicle, simu_period, rand_degrees, max_speed, max_steer, sensors_lock, commands_lock):
+def simu_loop(vehicle, simu_period, rand_degrees, max_speed, max_steer, sensors_lock, commands_lock, steer_dependant_alea):
     random.seed(42)
     i = 1
     while True:
         sleep(simu_period)
-        GLib.idle_add(iterate, (vehicle, simu_period, rand_degrees, max_speed, max_steer, sensors_lock, commands_lock, i))
+        GLib.idle_add(iterate, (vehicle, simu_period, rand_degrees, max_speed, max_steer, sensors_lock, commands_lock, steer_dependant_alea, i))
         i += 1
 
 
 # simulation process
 def main_simulator(vehicle, circuit, sensors_lock, commands_lock):
-    print("main_simu")
     # Parameters Begin
     window_size = (1200, 800)  # size of the window in pixels
     scale = (150, 100)  # max size of the map in meters for both coordinates, used for scaling
@@ -421,15 +277,135 @@ def main_simulator(vehicle, circuit, sensors_lock, commands_lock):
     rand_degrees = 1  # maximum random deviation (in degrees) in the new angle calculation from steer and previous angle (angle is multiplied by : 1 + rand_degrees / 360 * random_minus1_plus1 * speed / max_speed)
     max_speed = 5  # maximum speed value (speed <= max_speed)
     max_steer = 45  # maximum steer value (-max_steer <= steer <= max_steer)
+    steer_dependant_alea = False
     # Parameters End
 
     # create the window object used by the graphical library
     SimuWindow(window_size, vehicle, scale, circuit, coefs, sensors_lock)
 
     # create a thread for the simu_loop() function
-    Thread(target=simu_loop, args=(vehicle, simu_period, rand_degrees, max_speed, max_steer, sensors_lock, commands_lock), daemon=True).start()
+    Thread(target=simu_loop, args=(vehicle, simu_period, rand_degrees, max_speed, max_steer, sensors_lock, commands_lock, steer_dependant_alea), daemon=True).start()
     # launches the graphical simulator application
     Gtk.main()
+
+
+################
+### PID loop ###
+################
+
+# PID coefficients
+class K:
+    def __init__(self, kp, ki, kd):
+        self.p = kp
+        self.i = ki
+        self.d = kd
+
+
+# compute the angle formed by two points from the north
+def compute_direction(x1, y1, x2, y2):
+    if x1 == x2:
+        if y1 < y2:
+            return 0.0
+        elif y1 > y2:
+            return 180.0
+        else:
+            raise Exception("Error : Could not compute direction. Provided coordinates are equal")
+    else:
+        a = (y2 - y1) / (x2 - x1)
+        if x1 < x2:
+            angle = math.pi / 2 - math.atan(a)
+        else:
+            angle = 3 * math.pi / 2 - math.atan(a)
+        return math.degrees(angle)
+
+
+# get aimed direction depending on the current and target positions
+def get_aimed_direction(position, destination):
+    return compute_direction(position.x, position.y, destination.x, destination.y)
+
+
+# get aimed speed depending on the distance to target
+def get_aimed_speed(position, destination, stop_distance, max_speed):
+    distance_to_target = position.distance_to(destination)
+    if distance_to_target < stop_distance:
+        aimed_speed = distance_to_target * 0.5 - 0.5
+        if aimed_speed < 0:
+            return 0
+        else:
+            return aimed_speed
+    else:
+        return max_speed
+
+
+# basically a difference with modulos
+def compute_direction_error(measured_direction, aimed_direction):
+    return compute_angle_difference(aimed_direction, measured_direction)
+
+
+# pid process
+def main_pid_loop(vehicle, circuit, sensors_lock, commands_lock):
+    # Parameters Begin
+    pid_period = 0.05
+    max_speed = 5
+    stop_distance = 1
+    k = K(3, 0.1, 10)  # steer pid coefs (kp, ki, kd)
+    # Parameters End
+
+    previous_error_direction = 0
+    total_error_direction = 0
+
+    currently_targeted_stop_point = int(circuit.clockwise)  # from 0 to 3 (bottom left, top left, top right, bottom right)
+    currently_targeted_aux_point = 0  # from 0 to (n_aux_points - 1)
+    destination = circuit.aux_points[currently_targeted_stop_point][currently_targeted_aux_point]
+    # print(destination)
+
+    # pid loop
+    # http://www.ferdinandpiette.com/blog/2011/08/implementer-un-pid-sans-faire-de-calculs/
+    while True:
+        sleep(pid_period)
+
+        with sensors_lock:
+            current_direction = vehicle.angle
+            position = vehicle.position
+
+        # direction
+        aimed_direction = get_aimed_direction(position, destination)
+        error_direction = compute_direction_error(current_direction, aimed_direction)
+        total_error_direction += error_direction
+
+        steer = \
+            k.p * error_direction + \
+            k.i * total_error_direction + \
+            k.d * (error_direction - previous_error_direction)
+
+        speed = get_aimed_speed(position, destination, stop_distance, max_speed)
+
+        # destination change
+        distance_to_target = position.distance_to(destination)
+        if distance_to_target < stop_distance:
+            currently_targeted_aux_point += 1
+            if currently_targeted_aux_point == circuit.n_aux_points:
+                currently_targeted_aux_point = 0
+                currently_targeted_stop_point += 1
+                if currently_targeted_stop_point == 4:
+                    currently_targeted_stop_point = 0
+
+            destination = circuit.aux_points[currently_targeted_stop_point][currently_targeted_aux_point]
+            # print(destination)
+
+        """
+        print("speed = " + str(round(speed, 2)) + "\t\t" + "kp = " + str(
+            round(k.p * error_direction, 2)) + "\t\t" + "ki = " + str(
+            round(k.i * total_error_direction, 2)) + "\t\t" + "kd = " + str(
+            round(k.d * (error_direction - previous_error_direction), 2)) + "\t\t" + "steer = " + str(
+            round(steer, 2)) + "\n")
+        """
+
+        previous_error_direction = error_direction
+
+        with commands_lock:
+            vehicle.speed = speed
+            vehicle.steer = steer
 
 
 ############
@@ -472,13 +448,7 @@ def main():
     sensors_lock = RLock()
     commands_lock = RLock()
 
-    #om2m
-    port = 1800
-    Thread(target=main_monitor2, args=(2200, vehicle, sensors_lock, commands_lock), daemon=True).start()
-    Thread(target=main_monitor, args=(port, vehicle, sensors_lock), daemon=True).start()
-    request_om2m.init_om2m("NavLink", 2200)
-    request_om2m.init_om2m("NavCommands", port)
-
+    Thread(target=main_pid_loop, args=(vehicle, circuit, sensors_lock, commands_lock), daemon=True).start()
     main_simulator(vehicle, circuit, sensors_lock, commands_lock)
 
 
