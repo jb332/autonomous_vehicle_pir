@@ -10,6 +10,10 @@ If you already cloned this repository the classic way, you will get blank direct
 
     git submodule update --init --recursive
 
+Conseil: la commande suivante met à jour les sous répertoires git vers head (sinon commit au moment de l'ajout):
+
+    git submodule update --remote
+
 ## Conception
 You can find diagrams to understand how the project works in the following directory :
 
